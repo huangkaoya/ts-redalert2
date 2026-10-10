@@ -14,9 +14,15 @@ interface MeshBatch {
 export class MeshBatchManager extends RenderableContainer {
     private renderableContainer: RenderableContainer;
     private batches: Map<string, MeshBatch[]> = new Map();
+    private viewFrustum?: THREE.Frustum;
+    private shadowFrustum?: THREE.Frustum;
     constructor(renderableContainer: RenderableContainer) {
         super();
         this.renderableContainer = renderableContainer;
+    }
+    setCullingFrustums(view?: THREE.Frustum, shadow?: THREE.Frustum): void {
+        this.viewFrustum = view;
+        this.shadowFrustum = shadow;
     }
     create3DObject(): void {
         let container = this.get3DObject();
@@ -41,7 +47,14 @@ export class MeshBatchManager extends RenderableContainer {
         const meshes: BatchedMesh[] = [];
         container.traverseVisible((object) => {
             if ((object as any).isBatchedMesh) {
-                meshes.push(object as BatchedMesh);
+                const mesh = object as BatchedMesh;
+                // Merged meshes keep their existing path. Retain offscreen casters
+                // in the light's volume so their visible shadows are not removed.
+                if (mesh.batchMode !== BatchMode.Instancing || !mesh.frustumCulled ||
+                    !this.viewFrustum || this.viewFrustum.intersectsObject(mesh) ||
+                    (mesh.castShadow && this.shadowFrustum?.intersectsObject(mesh))) {
+                    meshes.push(mesh);
+                }
             }
         });
         return meshes;

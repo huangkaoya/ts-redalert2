@@ -18,6 +18,7 @@ import { SuperWeaponFxHandler } from '@/engine/renderable/fx/handler/SuperWeapon
 import { CrateFxHandler } from '@/engine/renderable/fx/handler/CrateFxHandler';
 import { BeaconFxHandler } from '@/engine/renderable/fx/handler/BeaconFxHandler';
 import { VxlBuilderFactory } from '@/engine/renderable/builder/VxlBuilderFactory';
+import { Coords } from '@/game/Coords';
 export class WorldView {
     private disposables = new CompositeDisposable();
     private worldScene?: WorldScene;
@@ -57,6 +58,11 @@ export class WorldView {
         const fullSize = this.game.map.mapBounds.getFullSize();
         const lightFocus = IsoCoords.screenTileToWorld(fullSize.width / 2, fullSize.height / 2);
         worldScene.setLightFocusPoint(lightFocus.x, lightFocus.y);
+        // Include ramps and elevated bridge surfaces that receive voxel shadows.
+        worldScene.setShadowReceiverHeights(
+            Coords.tileHeightToWorld(this.game.map.tiles.getMinTileHeight()),
+            Coords.tileHeightToWorld(this.game.map.tiles.getMaxTileHeight() + 4)
+        );
         const viewportHelper = new WorldViewportHelper(worldScene);
         const tileIntersectHelper = new MapTileIntersectHelper(this.game.map, worldScene);
         const playerShroud = localPlayer ? this.game.mapShroudTrait.getPlayerShroud(localPlayer) : undefined;

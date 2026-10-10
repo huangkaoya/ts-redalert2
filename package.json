@@ -9,6 +9,7 @@
     "dev:bun": "bun --bun vite",
     "build": "bun --bun vite build",
     "test": "bun test",
+    "test:rendering": "node src/test/rendering/run.mjs",
     "typecheck:entry": "bun --bun tsc -p tsconfig.build.json",
     "preview": "bun --bun vite preview",
     "live:runtime": "bun scripts/live-interaction-runtime.mjs",

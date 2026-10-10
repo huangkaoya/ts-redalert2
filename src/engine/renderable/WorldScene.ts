@@ -10,12 +10,14 @@ import { MeshBatchManager } from '../gfx/batch/MeshBatchManager';
 import { BoxedVar } from '../../util/BoxedVar';
 import { setMeshLineViewportResolution } from './fx/MeshLineResolution';
 import * as THREE from 'three';
+import { DirectionalShadowFitter } from './DirectionalShadowFitter';
+import { updatePaddedFrustum } from '../gfx/batch/paddedFrustum';
 const AMBIENT_LIGHT_INTENSITY = 0.8;
 const CAMERA_FAR = 16000;
 const SHADOW_QUALITY_MAP = new Map([
-    [ShadowQuality.High, 8],
-    [ShadowQuality.Medium, 4],
-    [ShadowQuality.Low, 2]
+    [ShadowQuality.High, 4],
+    [ShadowQuality.Medium, 2],
+    [ShadowQuality.Low, 1]
 ]);
 export class WorldScene extends RenderableContainer {
     public scene: THREE.Scene;
@@ -32,6 +34,10 @@ export class WorldScene extends RenderableContainer {
     private initialized: boolean = false;
     private ambientLight: THREE.AmbientLight;
     private directionalLight: THREE.DirectionalLight;
+    private shadowFitter = new DirectionalShadowFitter(128, 32 * Coords.ISO_WORLD_SCALE);
+    private hasShadowReceiverHeights = false;
+    private batchViewFrustum = new THREE.Frustum();
+    private batchProjectionMatrix = new THREE.Matrix4();
     private _onBeforeCameraUpdate = new EventDispatcher<WorldScene, number>();
     private _onCameraUpdate = new EventDispatcher<WorldScene, number>();
     private lastCameraPan?: {
@@ -174,6 +180,7 @@ export class WorldScene extends RenderableContainer {
         }
     }
     updateShadowQuality(light: THREE.DirectionalLight, quality: ShadowQuality): void {
+        this.shadowFitter.invalidate();
         const enableShadows = quality !== ShadowQuality.Off;
         light.castShadow = enableShadows;
         if (enableShadows) {
@@ -186,13 +193,32 @@ export class WorldScene extends RenderableContainer {
             shadowCamera.bottom = -shadowSize;
             shadowCamera.near = -4000 * worldScale;
             shadowCamera.far = 3000 * worldScale;
+            shadowCamera.updateProjectionMatrix();
             const shadowMapMultiplier = SHADOW_QUALITY_MAP.get(quality);
             if (!shadowMapMultiplier) {
                 throw new Error(`Unsupported shadow quality "${quality}"`);
             }
-            light.shadow.mapSize.width = 1024 * shadowMapMultiplier;
-            light.shadow.mapSize.height = 1024 * shadowMapMultiplier;
+            const resolution = 1024 * shadowMapMultiplier;
+            if (light.shadow.mapSize.x !== resolution || light.shadow.mapSize.y !== resolution) {
+                this.disposeShadowMap(light);
+                light.shadow.mapSize.set(resolution, resolution);
+            }
+            if (this.hasShadowReceiverHeights) {
+                this.shadowFitter.fit(this.camera, light, this.viewport);
+            }
         }
+        else {
+            this.disposeShadowMap(light);
+        }
+    }
+    setShadowReceiverHeights(min: number, max: number): void {
+        this.shadowFitter.setReceiverHeights(min, max);
+        this.hasShadowReceiverHeights = true;
+    }
+    private disposeShadowMap(light: THREE.DirectionalLight): void {
+        light.shadow.map?.dispose();
+        light.shadow.map = null;
+        light.shadow.needsUpdate = true;
     }
     setLightFocusPoint(x: number, y: number): void {
         this.lightFocusPoint = { x, y };
@@ -220,6 +246,24 @@ export class WorldScene extends RenderableContainer {
         }
         this._onCameraUpdate.dispatch(this, deltaTime);
         this.scene.updateMatrixWorld(false);
+        if (this.directionalLight.castShadow && this.hasShadowReceiverHeights) {
+            if (!this.shadowFitter.fit(this.camera, this.directionalLight, this.viewport)) {
+                this.shadowFitter.invalidate();
+                const size = 3500 * Coords.ISO_WORLD_SCALE;
+                const camera = this.directionalLight.shadow.camera;
+                camera.left = camera.bottom = -size;
+                camera.right = camera.top = size;
+                camera.updateProjectionMatrix();
+            }
+        }
+        const hasViewFrustum = updatePaddedFrustum(this.camera, this.viewport, 128,
+            this.batchViewFrustum, this.batchProjectionMatrix);
+        let shadowFrustum: THREE.Frustum | undefined;
+        if (this.directionalLight.castShadow) {
+            this.directionalLight.shadow.updateMatrices(this.directionalLight);
+            shadowFrustum = this.directionalLight.shadow.getFrustum();
+        }
+        this.meshBatchManager?.setCullingFrustums(hasViewFrustum ? this.batchViewFrustum : undefined, shadowFrustum);
         this.meshBatchManager?.updateMeshes();
     }
     dispose(): void {
@@ -227,7 +271,7 @@ export class WorldScene extends RenderableContainer {
             this.shadowQuality.onChange.unsubscribe(this.shadowQualityListener);
             this.shadowQualityListener = undefined;
         }
-        (this.directionalLight.shadow.map as any)?.dispose();
+        this.disposeShadowMap(this.directionalLight);
         if (this.meshBatchManager) {
             this.meshBatchManager.dispose();
             this.remove(this.meshBatchManager);

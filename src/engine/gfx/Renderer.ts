@@ -27,7 +27,11 @@ export class Renderer {
         if (!this.renderer) {
             throw new Error('Renderer not yet initialized');
         }
-        return !!this.renderer.extensions.get('ANGLE_instanced_arrays');
+        const context = this.renderer.getContext();
+        // Instancing is core in WebGL2; the WebGL1 extension may be absent.
+        return 'drawElementsInstanced' in context && 'vertexAttribDivisor' in context &&
+            typeof context.drawElementsInstanced === 'function' &&
+            typeof context.vertexAttribDivisor === 'function';
     }
     initStats(container: HTMLElement): void {
         if (!this.stats) {

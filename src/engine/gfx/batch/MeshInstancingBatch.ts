@@ -35,7 +35,12 @@ export class MeshInstancingBatch {
     set clippingPlanes(value: THREE.Plane[]) {
         this._clippingPlanes = value;
         if (this.instancedMesh) {
-            (this.instancedMesh.material as any).clippingPlanes = value;
+            this.applyClippingPlanes(this.instancedMesh);
+        }
+    }
+    private applyClippingPlanes(mesh: InstancedMesh): void {
+        for (const material of [mesh.material as THREE.Material, mesh.customDepthMaterial, mesh.customDistanceMaterial]) {
+            if (material) material.clippingPlanes = this._clippingPlanes;
         }
     }
     get renderOrder(): number {
@@ -69,8 +74,9 @@ export class MeshInstancingBatch {
             if (!this.instancedMesh) {
                 this.instancedMesh = new InstancedMesh(meshes[0].geometry, meshes[0].material, this.maxInstances, true);
                 this.instancedMesh.castShadow = this._castShadow;
+                this.instancedMesh.receiveShadow = this._receiveShadow;
                 this.instancedMesh.renderOrder = this._renderOrder;
-                (this.instancedMesh.material as any).clippingPlanes = this._clippingPlanes;
+                this.applyClippingPlanes(this.instancedMesh);
                 if (hasPalette) {
                     const geometry = this.instancedMesh.geometry as THREE.InstancedBufferGeometry;
                     geometry.setAttribute('instancePaletteOffset', new THREE.InstancedBufferAttribute(new Float32Array(this.maxInstances), 1));

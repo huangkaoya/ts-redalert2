@@ -1,23 +1,12 @@
 import * as THREE from 'three';
-const depthMaterial = new THREE.MeshDepthMaterial();
-depthMaterial.depthPacking = THREE.RGBADepthPacking;
-(depthMaterial as any).clipping = true;
-(depthMaterial as any).defines = { INSTANCE_TRANSFORM: "" };
-const distanceShader = THREE.ShaderLib.distance;
-const distanceUniforms = THREE.UniformsUtils.clone(distanceShader.uniforms);
-const distanceDefines = { USE_SHADOWMAP: "", INSTANCE_TRANSFORM: "" };
-const distanceMaterial = new THREE.ShaderMaterial({
-    defines: distanceDefines,
-    uniforms: distanceUniforms,
-    vertexShader: distanceShader.vertexShader,
-    fragmentShader: distanceShader.fragmentShader,
-    clipping: true,
-});
+import { installInstancingShader } from './instancingShader';
 export class InstancedMesh extends THREE.Mesh {
     public maxInstances: number;
     public uniformScale: boolean;
     public useInstanceColor: boolean;
     private instanceMatrixAttributes: THREE.InstancedBufferAttribute[];
+    private inverseWorldMatrix = new THREE.Matrix4();
+    private localInstanceMatrix = new THREE.Matrix4();
     constructor(geometry: THREE.BufferGeometry, material: THREE.Material, maxInstances: number, uniformScale: boolean, useInstanceColor: boolean = false) {
         const instancedGeometry = new THREE.InstancedBufferGeometry();
         (instancedGeometry as any).copy(geometry);
@@ -26,10 +15,10 @@ export class InstancedMesh extends THREE.Mesh {
         this.uniformScale = uniformScale;
         this.useInstanceColor = useInstanceColor;
         this.initAttributes(this.geometry as THREE.InstancedBufferGeometry);
-        this.material = this.decorateMaterial(material.clone());
+        this.material = this.decorateMaterial(material.clone(), !!(material as any).palette);
         this.frustumCulled = false;
-        this.customDepthMaterial = depthMaterial;
-        this.customDistanceMaterial = distanceMaterial;
+        this.customDepthMaterial = this.decorateMaterial(new THREE.MeshDepthMaterial({ depthPacking: THREE.RGBADepthPacking }));
+        this.customDistanceMaterial = this.decorateMaterial(new THREE.MeshDistanceMaterial());
     }
     private initAttributes(geometry: THREE.InstancedBufferGeometry): void {
         const attributes: Array<{
@@ -69,7 +58,7 @@ export class InstancedMesh extends THREE.Mesh {
             .fill(0)
             .map((_, i) => geometry.getAttribute("instanceMatrix" + i) as THREE.InstancedBufferAttribute);
     }
-    private decorateMaterial(material: THREE.Material): THREE.Material {
+    private decorateMaterial(material: THREE.Material, palette = false): THREE.Material {
         const mat = material as any;
         if (!mat.defines) {
             mat.defines = {};
@@ -88,6 +77,7 @@ export class InstancedMesh extends THREE.Mesh {
             delete mat.defines.INSTANCE_COLOR;
         }
         mat.defines.INSTANCE_OPACITY = "";
+        installInstancingShader(material, palette);
         return material;
     }
     public setRenderCount(count: number): void {
@@ -110,9 +100,13 @@ export class InstancedMesh extends THREE.Mesh {
         const opacityAttr = attributes.instanceOpacity as THREE.InstancedBufferAttribute;
         const paletteOffsetAttr = attributes.instancePaletteOffset as THREE.InstancedBufferAttribute;
         const extraLightAttr = attributes.instanceExtraLight as THREE.InstancedBufferAttribute;
+        // Source matrices are in world space; the batch can have a transformed parent.
+        this.updateWorldMatrix(true, false);
+        this.inverseWorldMatrix.copy(this.matrixWorld).invert();
         for (let i = 0, len = meshes.length; i < len; i++) {
             const mesh = meshes[i];
-            this.setMatrixAt(i, mesh.matrixWorld);
+            this.localInstanceMatrix.multiplyMatrices(this.inverseWorldMatrix, mesh.matrixWorld);
+            this.setMatrixAt(i, this.localInstanceMatrix);
             const opacity = mesh.getOpacity();
             if (opacityAttr.getX(i) !== opacity) {
                 opacityAttr.setX(i, opacity);
@@ -142,5 +136,7 @@ export class InstancedMesh extends THREE.Mesh {
     public dispose(): void {
         this.geometry.dispose();
         (this.material as THREE.Material).dispose();
+        this.customDepthMaterial?.dispose();
+        this.customDistanceMaterial?.dispose();
     }
 }

@@ -1,10 +1,10 @@
 # RA2WEB React
 
-免责声明：这是基于《时空分裂》中文版RA2WEB www.ra2web.com 的分析而开发，并意图基于最新的react和three版本进行重构。
+免责声明：这是基于《红色井界》RA2WEB www.ra2web.com 的分析而开发，并意图基于最新的react和three版本进行重构。
 
-但项目所有权利（包括收益权）归《时空分裂》/RA2WEB负责人所有。未经《时空分裂》的所有者/RA2WEB负责人许可，严禁用于任何商业行为。
+但项目所有权利（包括收益权）归《红色井界》/RA2WEB负责人所有。未经《红色井界》/RA2WEB负责人许可，严禁用于任何商业行为。
 
-需要注意的是，《时空分裂》的所有者从未以任何方式开源游戏客户端代码（即便存在诸如mod-sdk之类的周边开源内容）。本项目运行产生的BUG、功能不完善，不能等同视为对《时空分裂》的名誉贬损。任何基于本项目开展商业行为，包括但不限于植入广告、开发“弹幕红警”收受礼物获利、直接封装收费、以“作者”身份骗取赞助和充电收益等，均视为对《时空分裂》原作者Alexandru Ciucă和RA2WEB的侵权。
+需要注意的是，《红色井界》/RA2WEB的负责人从未以任何方式开源游戏客户端代码（即便存在诸如mod-sdk之类的周边开源内容）。本项目运行产生的BUG、功能不完善，不能等同视为对《红色井界》/RA2WEB的名誉贬损。
 
 红色警戒2网页版，一款经典的即时战略类游戏的完整TypeScript重构版本，使用React + TypeScript + Vite + Three.js构建。
 
@@ -12,9 +12,9 @@
 
 Disclaimer
 
-This project is developed based on the analysis of the Chinese version of Chronodivide — RA2WEB (www.ra2web.com), and is intended to be refactored using the latest versions of React and Three.js. All rights to this project, including profit rights, belong to the owner of Chronodivide. Without permission from the owner of Chronodivide, any commercial use of this project is strictly prohibited.
+This project is developed based on the analysis of 红色井界 / RA2WEB (www.ra2web.com), and is intended to be refactored using the latest versions of React and Three.js. All rights to this project, including profit rights, belong to the owner of 红色井界 / RA2WEB. Without permission from the owner of 红色井界 / RA2WEB, any commercial use of this project is strictly prohibited.
 
-It should be noted that the owner of Chronodivide has never open-sourced the game client code in any form, even though some peripheral open‑source content such as a mod‑SDK exists. Bugs, incomplete functions or other issues arising from the operation of this project shall not be regarded as damage to the reputation of Chronodivide. Any commercial activities conducted based on this project, including but not limited to placing advertisements, developing a “bullet-screen Red Alert” mode to profit from gifts, directly packaging and selling the project, or fraudulently obtaining sponsorship and donation revenue by claiming to be the “author”, shall be deemed as infringement upon the original author of Chronodivide, Alexandru Ciucă, and RA2WEB.
+It should be noted that the owner of 红色井界 / RA2WEB has never open-sourced the game client code in any form, even though some peripheral open-source content such as a mod-SDK exists. Bugs, incomplete functions or other issues arising from the operation of this project shall not be regarded as damage to the reputation of 红色井界 / RA2WEB.
 
 ![image](https://github.com/user-attachments/assets/f146dc1c-ca15-456a-a8f0-4b43f2d431e8)
 
@@ -217,7 +217,7 @@ bun run build
 本项目基于GNU General Public License v3.0（GPL-3.0）许可证开源。详见 [LICENSE](LICENSE) 文件。
 
 ### 重要说明
-- 可以自由使用、修改和分发，除非取得RA2WEB负责人许可，否则严禁用于商业目的
+- 可以自由使用、修改和分发，除非取得《红色井界》/RA2WEB负责人许可，否则严禁用于商业目的
 - 必须保留版权声明和许可证文本
 - 任何衍生作品必须使用相同的 GPL-3.0 许可证
 - 必须提供源代码，包括修改后的版本
@@ -227,7 +227,7 @@ bun run build
 
 ## 致谢
 
-- RA2WEB.COM
+- 《红色井界》/ RA2WEB.COM
 - Three.js 社区
 - React 团队
 - TypeScript 团队

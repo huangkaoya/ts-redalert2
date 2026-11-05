@@ -107,21 +107,27 @@ export class MapApi {
         isFoot = isFoot ?? speedType === SpeedType.Foot;
         return this.map.terrain.getPassableSpeed(tile, speedType, isFoot, options) > 0;
     }
-    findPath(tile: any, ...args: any[]) {
-        const [isFoot, start, end, options] = args[0] !== 'boolean'
-            ? [tile === SpeedType.Foot, ...args]
-            : args;
-        const path = this.game.map.terrain.computePath(tile, isFoot, start.tile, start.onBridge, end.tile, end.onBridge, {
-            bestEffort: options?.bestEffort,
-            excludeTiles: options?.excludeNodes
-                ? (node: any) => options.excludeNodes({
-                    tile: node.tile,
-                    onBridge: !!node.onBridge,
-                })
-                : undefined,
-            maxExpandedNodes: options?.maxExpandedNodes,
-        });
-        return path.map(node => ({ tile: node.tile, onBridge: !!node.onBridge }));
+    findPath(speedType: any, isFoot: boolean, start: any, end: any, options?: any) {
+        // 完善模拟层逻辑：(speedType, isFoot, start, end, options).
+        const path = this.game.map.terrain.computePath(
+            speedType,
+            isFoot,
+            start.tile,
+            start.onBridge,
+            end.tile,
+            end.onBridge,
+            {
+                bestEffort: options?.bestEffort,
+                excludeTiles: options?.excludeNodes
+                    ? (node: any) => options.excludeNodes({
+                        tile: node.tile,
+                        onBridge: !!node.onBridge,
+                    })
+                    : undefined,
+                maxExpandedNodes: options?.maxExpandedNodes,
+            },
+        );
+        return path.map((node: any) => ({ tile: node.tile, onBridge: !!node.onBridge }));
     }
     isVisibleTile(tile: any, playerName: string, level: number = 0) {
         const player = this.game.getPlayerByName(playerName);
@@ -137,7 +143,8 @@ export class MapApi {
             const count = trait.getBailCount();
             return {
                 tile: obj.tile,
-                ore: type === TiberiumType.Ore ? count : 0,
+                // 完善模拟层逻辑：any non-gem tiberium counts as ore (Ore/Vinifera/Aboreus).
+                ore: type !== TiberiumType.Gems ? count : 0,
                 gems: type === TiberiumType.Gems ? count : 0,
                 spawnsOre: false,
             };
@@ -165,14 +172,17 @@ export class MapApi {
         }
         return data;
     }
-    getReachabilityMap(speedType: SpeedType, onBridge: boolean) {
+    getReachabilityMap(speedType: SpeedType, isInfantry: boolean) {
         const terrain = this.map.terrain as any;
-        const islandIdMap = terrain.getIslandIdMap(speedType, onBridge);
+        const islandIdMap = terrain.getIslandIdMap(speedType, isInfantry);
         return {
             isReachable(from: { tile: any; onBridge?: boolean }, to: { tile: any; onBridge?: boolean }): boolean {
-                const fromId = islandIdMap.get(from.tile, !!from.onBridge);
-                const toId = islandIdMap.get(to.tile, !!to.onBridge);
+                const fromId = this.getRegionId(from);
+                const toId = this.getRegionId(to);
                 return fromId !== undefined && fromId === toId;
+            },
+            getRegionId(pos: { tile: any; onBridge?: boolean }): number | undefined {
+                return islandIdMap.get(pos.tile, !!pos.onBridge);
             },
         };
     }

@@ -27,6 +27,7 @@ import { Vector2 } from "@/game/math/Vector2";
 import { DelayedKillTrait } from "@/game/gameobject/trait/DelayedKillTrait";
 import { BuildStatusChangeEvent } from "@/game/event/BuildStatusChangeEvent";
 import { NotifyBuildStatus } from "@/game/gameobject/trait/interface/NotifyBuildStatus";
+import { SecureProgressTrait } from "@/game/gameobject/trait/SecureProgressTrait";
 export enum BuildStatus {
     BuildUp = 0,
     Ready = 1,
@@ -38,6 +39,7 @@ export class Building extends Techno {
     private _buildStatus: BuildStatus;
     public lastBuildStatus: BuildStatus;
     public garrisonTrait?: GarrisonTrait;
+    public secureProgressTrait?: SecureProgressTrait;
     public c4ChargeTrait?: C4ChargeTrait;
     public delayedKillTrait?: DelayedKillTrait;
     public cabHutTrait?: CabHutTrait;
@@ -61,6 +63,16 @@ export class Building extends Techno {
         if (rules.canBeOccupied) {
             building.garrisonTrait = new GarrisonTrait(building, gameRules.audioVisual.conditionRed, rules.maxNumberOccupants);
             building.traits.add(building.garrisonTrait);
+        }
+        if (
+            rules.capturable &&
+            rules.needsEngineer &&
+            (rules.produceCashStartup > 0 || rules.produceCashAmount > 0)
+        ) {
+            building.secureProgressTrait = new SecureProgressTrait(
+                gameRules.general.engineerTechSecureTime,
+            );
+            building.traits.add(building.secureProgressTrait);
         }
         if (rules.canC4 && !rules.wall) {
             building.c4ChargeTrait = new C4ChargeTrait();

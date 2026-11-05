@@ -29,21 +29,27 @@ import { browserFileSystemAccess } from './engine/gameRes/browserFileSystemAcces
 import type { TestToolRuntimeContext } from './tools/TestToolSupport';
 import { attachPerformanceOptions, installPerformanceDebugApi } from './performance/PerformanceRuntime';
 
+async function importDevModuleByPath(modulePath: string): Promise<any> {
+    // Use a non-literal dynamic import so entry typecheck does not pull tools into
+    // the simulation-layer compile graph; tools adapt at runtime instead.
+    return import(/* @vite-ignore */ modulePath);
+}
+
 const optionalDevModuleImporters: Record<string, () => Promise<any>> = {
-    './tools/VxlTester': () => import('./tools/VxlTester'),
-    './tools/LobbyFormTester': () => import('./tools/LobbyFormTester'),
-    './tools/SoundTester': () => import('./tools/SoundTester'),
-    './tools/BuildingTester': () => import('./tools/BuildingTester'),
-    './tools/InfantryTester': () => import('./tools/InfantryTester'),
-    './tools/AircraftTester': () => import('./tools/AircraftTester'),
-    './tools/VehicleTester': () => import('./tools/VehicleTester'),
-    './tools/TestToolSupport': () => import('./tools/TestToolSupport'),
-    './tools/ShpTester': () => import('./tools/ShpTester'),
-    './tools/WorldSceneTester': () => import('./tools/WorldSceneTester'),
-    './tools/UnitMovementTester': () => import('./tools/UnitMovementTester'),
-    './tools/PerformanceTester': () => import('./tools/PerformanceTester'),
-    './tools/LiveInteractionTester': () => import('./tools/LiveInteractionTester'),
-    './tools/SceneSandboxTester': () => import('./tools/SceneSandboxTester'),
+    './tools/VxlTester': () => importDevModuleByPath('./tools/VxlTester'),
+    './tools/LobbyFormTester': () => importDevModuleByPath('./tools/LobbyFormTester'),
+    './tools/SoundTester': () => importDevModuleByPath('./tools/SoundTester'),
+    './tools/BuildingTester': () => importDevModuleByPath('./tools/BuildingTester'),
+    './tools/InfantryTester': () => importDevModuleByPath('./tools/InfantryTester'),
+    './tools/AircraftTester': () => importDevModuleByPath('./tools/AircraftTester'),
+    './tools/VehicleTester': () => importDevModuleByPath('./tools/VehicleTester'),
+    './tools/TestToolSupport': () => importDevModuleByPath('./tools/TestToolSupport'),
+    './tools/ShpTester': () => importDevModuleByPath('./tools/ShpTester'),
+    './tools/WorldSceneTester': () => importDevModuleByPath('./tools/WorldSceneTester'),
+    './tools/UnitMovementTester': () => importDevModuleByPath('./tools/UnitMovementTester'),
+    './tools/PerformanceTester': () => importDevModuleByPath('./tools/PerformanceTester'),
+    './tools/LiveInteractionTester': () => importDevModuleByPath('./tools/LiveInteractionTester'),
+    './tools/SceneSandboxTester': () => importDevModuleByPath('./tools/SceneSandboxTester'),
 };
 
 export type SplashScreenUpdateCallback = (props: ComponentProps<typeof SplashScreenComponent> | null) => void;

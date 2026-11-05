@@ -82,9 +82,10 @@ export class VeteranTrait implements NotifyTargetDestroy {
             return;
         if (target.rules.dontScore || target.rules.insignificant)
             return;
-        const isTemporalOrParasiteKill = weapon && (weapon.warhead.rules.temporal ||
-            (weapon.warhead.rules.parasite && source.rules.organic));
-        if (!isTemporalOrParasiteKill && !gameManager?.areFriendly(source, target)) {
+        // 完善模拟层逻辑：XP when (temporal/parasite kill) OR not friendly — not the inverse.
+        const isTemporalOrParasiteKill = !!(weapon && (weapon.warhead.rules.temporal ||
+            (weapon.warhead.rules.parasite && source.rules.organic)));
+        if (isTemporalOrParasiteKill || !gameManager.areFriendly(source, target)) {
             if (this.veteranLevel >= this.veteranRules.veteranCap)
                 return;
             const xpGain = target.rules.cost * (target.veteranLevel + 1);
@@ -125,7 +126,7 @@ export class VeteranTrait implements NotifyTargetDestroy {
     private setVeteranLevel(level: VeteranLevel): void {
         this.veteranLevel = level;
         if (this.veteranLevel === VeteranLevel.Elite) {
-            this.gameObject.armedTrait?.toggleEliteWeapons?.(true);
+            this.gameObject.armedTrait?.toggleEliteWeapons(true);
         }
     }
     private handlePromotion(gameObject: GameObject, gameManager: GameManager): void {
@@ -161,7 +162,7 @@ export class VeteranTrait implements NotifyTargetDestroy {
             }
         }
         if (gameObject.isInfantry() && this.hasVeteranAbility(VeteranAbility.FEARLESS)) {
-            gameObject.suppressionTrait?.disable?.();
+            gameObject.suppressionTrait?.disable();
         }
         if (this.hasVeteranAbility(VeteranAbility.C4)) {
             if (!gameObject.c4) {
@@ -171,7 +172,7 @@ export class VeteranTrait implements NotifyTargetDestroy {
         if (this.hasVeteranAbility(VeteranAbility.GUARD_AREA)) {
             if (!gameObject.defaultToGuardArea) {
                 gameObject.defaultToGuardArea = true;
-                if (gameObject.unitOrderTrait.isIdle?.()) {
+                if (gameObject.unitOrderTrait.isIdle()) {
                     gameObject.resetGuardModeToIdle();
                 }
             }

@@ -44,11 +44,10 @@ export class SpawnLinkTrait {
                 }
             }
             else {
+                // 完善模拟层逻辑：t ? (t instanceof MoveTask || t.cancel()) : tryMoveToParent
+                // Existing MoveTask is left alone; non-Move is cancelled; no task → move to parent.
                 if (currentTask) {
-                    if (currentTask instanceof MoveTask) {
-                        this.tryMoveToParent(gameObject, this.parent, world);
-                    }
-                    else {
+                    if (!(currentTask instanceof MoveTask)) {
                         currentTask.cancel();
                     }
                 }
@@ -64,11 +63,14 @@ export class SpawnLinkTrait {
     private tryMoveToParent(gameObject: GameObject, parent: GameObject, world: World): void {
         if (gameObject.tile !== parent.tile) {
             const currentTask = gameObject.unitOrderTrait.getCurrentTask();
-            if (currentTask instanceof MoveTask) {
-                currentTask.updateTarget(parent.tile, parent.isUnit() && parent.onBridge);
+            // 完善模拟层逻辑：only update existing MoveTask or add when idle; never interrupt other tasks.
+            if (currentTask) {
+                if (currentTask instanceof MoveTask) {
+                    currentTask.updateTarget(parent.tile, !!parent.isUnit() && parent.onBridge);
+                }
             }
             else {
-                gameObject.unitOrderTrait.addTask(new MoveTask(world as any, parent.tile, parent.isUnit() && parent.onBridge, {
+                gameObject.unitOrderTrait.addTask(new MoveTask(world as any, parent.tile, !!parent.isUnit() && parent.onBridge, {
                     closeEnoughTiles: 0,
                     strictCloseEnough: true
                 }));

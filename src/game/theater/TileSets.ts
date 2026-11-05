@@ -249,8 +249,6 @@ export class TileSets {
     public isHighBridgeBoundaryTile(tileNum: number): boolean {
         if (this.highBridgeSetNums.includes(this.getSetNum(tileNum))) {
             const tileEntry = this.getTile(tileNum);
-            if (!tileEntry)
-                return false;
             const headType = this.getHighBridgeHeadType(tileEntry.index);
             return (headType !== undefined &&
                 ![HighBridgeHeadType.MiddleTlBr, HighBridgeHeadType.MiddleTrBl].includes(headType));
@@ -260,8 +258,6 @@ export class TileSets {
     public isHighBridgeMiddleTile(tileNum: number): boolean {
         if (this.highBridgeSetNums.includes(this.getSetNum(tileNum))) {
             const tileEntry = this.getTile(tileNum);
-            if (!tileEntry)
-                return false;
             const headType = this.getHighBridgeHeadType(tileEntry.index);
             return (headType !== undefined &&
                 [HighBridgeHeadType.MiddleTlBr, HighBridgeHeadType.MiddleTrBl].includes(headType));

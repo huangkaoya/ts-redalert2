@@ -14,6 +14,7 @@ import { NotifyTick } from "@/game/gameobject/trait/interface/NotifyTick";
 import { NotifyUnspawn } from "@/game/gameobject/trait/interface/NotifyUnspawn";
 import { NotifyWarpChange } from "@/game/gameobject/trait/interface/NotifyWarpChange";
 import { ZoneType } from "@/game/gameobject/unit/ZoneType";
+import { SpecialWarheadType } from '@/game/SpecialWarheadType';
 interface MissileLaunch {
     missile: any;
     targetTile: any;
@@ -145,7 +146,7 @@ export class AirSpawnTrait implements NotifyDestroy, NotifyOwnerChange, NotifySp
                             const offset = Coords.vecGroundToWorld(FacingUtil.toMapCoords(missile.direction).multiplyScalar(1));
                             const detonationPos = launch.targetWorldPos.clone().add(offset);
                             const targetZone = world.map.getTileZone(launch.targetTile);
-                            launch.warhead.detonate(world, launch.damage, launch.targetTile, launch.targetBridge?.tileElevation ?? 0, detonationPos, targetZone, launch.targetBridge ? CollisionType.OnBridge : CollisionType.None, launch.target, { player: missile.owner, obj: gameObject, weapon: undefined } as any, false, undefined, undefined);
+                            launch.warhead.detonate(world, launch.damage, launch.targetTile, launch.targetBridge?.tileElevation ?? 0, detonationPos, targetZone, launch.targetBridge ? CollisionType.OnBridge : CollisionType.None, launch.target, { player: missile.owner, obj: gameObject, weapon: undefined } as any, SpecialWarheadType.None);
                         }
                     })).setCancellable(false));
                     const missileIndex = this.spawns.indexOf(missile);
@@ -215,7 +216,7 @@ export class AirSpawnTrait implements NotifyDestroy, NotifyOwnerChange, NotifySp
                 spawn.missileSpawnTrait.setDamage(damage).setWarhead(warhead).setLauncher(launcher);
                 this.missileLaunches.push({
                     missile: spawn,
-                    targetTile: (target.obj?.isUnit() ? target.obj : target).tile,
+                    targetTile: this.getMissileMoveTargetTile(target, world),
                     targetBridge: target.getBridge(),
                     targetWorldPos: target.getWorldCoords().clone(),
                     target: target,
@@ -233,6 +234,17 @@ export class AirSpawnTrait implements NotifyDestroy, NotifyOwnerChange, NotifySp
             return spawn;
         }
     }
+
+    getMissileMoveTargetTile(target: any, world: any): any {
+        return target.obj?.isUnit()
+            ? target.obj.tile
+            : target.obj?.isBuilding() && !world.map.isWithinBounds(target.tile)
+              ? world.map.tileOccupation
+                    .calculateTilesForGameObject(target.obj.tile, target.obj)
+                    .find((tile: any) => world.map.isWithinBounds(tile)) ?? target.tile
+              : target.tile;
+    }
+
     storeAircraft(aircraft: any, world: any): void {
         if (!this.spawns.includes(aircraft)) {
             throw new Error(`Object "${aircraft.name}#${aircraft.id}" not found in list of linked spawns`);

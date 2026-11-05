@@ -23,15 +23,22 @@ export class TeleportMoveToRefineryTask extends MoveTask {
         if (unit.moveTrait.isDisabled()) {
             return false;
         }
-        if (this.isCancelling() ||
+        // 完善模拟层逻辑：at a reached waypoint, a successful teleport finishes immediately.
+        if (!(this.isCancelling() ||
             unit.moveTrait.moveState !== MoveState.ReachedNextWaypoint ||
             unit.tile === this.teleportTile ||
-            !this.tryTeleportToRefinery(unit)) {
-            return super.onTick(unit) === true && (this.isCancelling() ||
+            !this.tryTeleportToRefinery(unit))) {
+            return true;
+        }
+        // 完善模拟层逻辑：when the underlying move finishes, still attempt
+        // teleport as a side effect, then always complete the task.
+        if (super.onTick(unit) === true) {
+            void (this.isCancelling() ||
                 unit.tile === this.teleportTile ||
                 this.tryTeleportToRefinery(unit));
+            return true;
         }
-        return true;
+        return false;
     }
     private tryTeleportToRefinery(unit: any): boolean {
         if ((this.teleportCondition && this.teleportCondition(unit, this.teleportTile) === false) ||

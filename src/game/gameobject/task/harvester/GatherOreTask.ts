@@ -54,10 +54,17 @@ export class GatherOreTask extends Task {
         const harvester = unit.harvesterTrait;
         if (harvester.status === HarvesterStatus.MovingToOreSite) {
             const previousTarget = this.target;
-            this.target = this.findClosestReachableOreSite(unit, this.target ||
-                (this.initialTarget?.landType !== LandType.Tiberium
+            // 完善模拟层逻辑：短路优先级：
+            // (this.target || initialTarget?.landType !== Tiberium)
+            //   ? (lastOreSite ?? unit.tile) : initialTarget
+            // When this.target is set, 模拟层 still rescans from lastOreSite/unit.tile.
+            this.target = this.findClosestReachableOreSite(
+                unit,
+                (this.target || this.initialTarget?.landType !== LandType.Tiberium)
                     ? (harvester.lastOreSite ?? unit.tile)
-                    : this.initialTarget), true);
+                    : this.initialTarget,
+                true,
+            );
             harvester.lastOreSite = this.target;
             if (!this.target) {
                 harvester.status = HarvesterStatus.LookingForOreSite;
@@ -140,7 +147,7 @@ export class GatherOreTask extends Task {
             .getObjectsOnTile(unit.tile)
             .find((obj: any) => obj.isOverlay() && obj.isTiberium());
         if (!tiberiumOverlay) {
-            const hasNearbyOre = this.findClosestReachableOreSite(unit, harvester.lastOreSite ?? unit.tile, false);
+            const hasNearbyOre = this.findClosestReachableOreSite(unit, unit.tile, false);
             if (hasNearbyOre || harvester.isEmpty()) {
                 harvester.status = HarvesterStatus.MovingToOreSite;
                 return this.onTick(unit);
@@ -156,15 +163,7 @@ export class GatherOreTask extends Task {
             this.game.unspawnObject(tiberiumOverlay);
         }
         if (collectedType !== undefined) {
-            if (collectedType === TiberiumType.Ore) {
-                harvester.ore++;
-            }
-            else if (collectedType === TiberiumType.Gems) {
-                harvester.gems++;
-            }
-            else {
-                throw new Error("Unsupported tiberium type " + collectedType);
-            }
+            harvester.addBails(collectedType, 1);
         }
         const hasRefinery = [...unit.owner.buildings].some((building: any) => building.rules.refinery);
         if (!hasRefinery && !this.explicitOrder) {
@@ -207,14 +206,14 @@ export class GatherOreTask extends Task {
                     if (!ore) {
                         throw new Error(`Ore should exist on tile ${tile.rx},${tile.ry} b/c of landType`);
                     }
-                    return { tile, ore };
+                    const tibTrait = ore.traits.get(TiberiumTrait);
+                    return { tile, ore, tibTrait };
                 });
-                tilesWithOre.sort((a, b) => {
-                    const valueDiff = b.ore.value - a.ore.value;
-                    const priorityA = PRIORITY_MATRIX[1 + a.tile.ry - startTile.ry][1 + a.tile.rx - startTile.rx];
-                    const priorityB = PRIORITY_MATRIX[1 + b.tile.ry - startTile.ry][1 + b.tile.rx - startTile.rx];
-                    return 1000 * valueDiff + (priorityB - priorityA);
-                });
+                // 完善模拟层逻辑：1e5*rules.value + 1e3*ore.value + neighbor priority matrix
+                tilesWithOre.sort((a, b) => 1e5 * (b.tibTrait.rules.value - a.tibTrait.rules.value) +
+                    1e3 * (b.ore.value - a.ore.value) +
+                    (PRIORITY_MATRIX[1 + b.tile.ry - startTile.ry][1 + b.tile.rx - startTile.rx] -
+                        PRIORITY_MATRIX[1 + a.tile.ry - startTile.ry][1 + a.tile.rx - startTile.rx]));
                 return tilesWithOre[0].tile;
             }
             startRadius = 2;

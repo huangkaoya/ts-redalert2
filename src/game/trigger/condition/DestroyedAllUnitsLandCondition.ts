@@ -4,12 +4,13 @@ import { TriggerCondition } from "@/game/trigger/TriggerCondition";
 export class DestroyedAllUnitsLandCondition extends TriggerCondition {
     private allDestroyed: boolean;
     private houseId: number;
-    constructor(params: any, context: any) {
-        super(params, context);
+    constructor(event: any, context: any) {
+        super(event, context);
         this.allDestroyed = false;
-        this.houseId = Number(params[1]);
+        this.houseId = Number(event.params[1]);
     }
-    check(events: any, eventList: any[]): boolean {
+    // 完善模拟层逻辑：check(context, events) — scan the events list (2nd arg).
+    check(_context: any, eventList: any[]): boolean {
         if (this.allDestroyed) {
             return true;
         }

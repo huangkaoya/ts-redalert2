@@ -10,6 +10,7 @@ interface Position {
 interface GameObject {
     position: Position;
     tile: Tile;
+    tileElevation: number;
     isUnit(): boolean;
     isBuilding(): boolean;
     isTechno(): boolean;
@@ -115,22 +116,23 @@ export class RangeHelper {
         range: number;
     } {
         let rangeBonus = 0;
+        // 完善模拟层逻辑：for buildings (non-arcing/non-vertical), add (w+h)/4 unless
+        // ivanBomb against a foundation with width+height > 2.
         if (hasPosition(target) && target.isBuilding() &&
             !weapon.projectileRules.arcing &&
-            !weapon.projectileRules.vertical &&
-            !weapon.warhead.rules.ivanBomb) {
+            !weapon.projectileRules.vertical) {
             const foundation = target.getFoundation();
-            if (foundation.width > 1 && foundation.height > 1) {
-                rangeBonus += Math.ceil(Math.min(foundation.width, foundation.height) / 2);
+            if (!(weapon.warhead.rules.ivanBomb && foundation.width + foundation.height > 2)) {
+                rangeBonus += (foundation.width + foundation.height) / 4;
             }
         }
-        if (weapon.projectileRules.subjectToElevation &&
-            !(weapon.projectileRules.arcing && !hasPosition(target))) {
+        if (!( !weapon.projectileRules.subjectToElevation ||
+            (weapon.projectileRules.arcing && !hasPosition(target)) )) {
             const shooterElevation = hasPosition(shooter)
-                ? shooter.tile.z + shooter.position.tileElevation
+                ? shooter.tile.z + shooter.tileElevation
                 : (shooter as TileCoord).z;
             const targetElevation = hasPosition(target)
-                ? target.tile.z + target.position.tileElevation
+                ? target.tile.z + target.tileElevation
                 : (target as TileCoord).z;
             if (targetElevation < shooterElevation) {
                 rangeBonus += gameRules.elevationModel.getBonus(shooterElevation, targetElevation);
@@ -205,7 +207,15 @@ export class RangeHelper {
         }
     }
     public isInTileRange(source: RangeTarget, target: RangeTarget, minRange: number, maxRange: number): boolean {
-        const distance = this.tileDistance(source, target);
+        let distance: number;
+        if (!Array.isArray(source) && hasPosition(target) && (target as any).isUnit()) {
+            const sourceTile = hasPosition(source) ? source.tile : (source as TileCoord);
+            distance = new Vector2(sourceTile.rx + 0.5, sourceTile.ry + 0.5).distanceTo(
+                (target as any).position.getMapPosition().multiplyScalar(1 / Coords.LEPTONS_PER_TILE),
+            );
+        } else {
+            distance = this.tileDistance(source, target);
+        }
         return MathUtil.isBetween(distance, minRange, maxRange);
     }
     public tileDistance(source: RangeTarget, target: RangeTarget): number {

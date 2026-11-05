@@ -8,10 +8,14 @@ export class PackBuildingTask extends Task {
         this.game = game;
     }
     onTick(unit: any): boolean {
-        if (unit.buildStatus !== BuildStatus.BuildDown && !unit.rules.wall) {
+        // 完善模拟层逻辑：always set BuildDown when not already packing; only walls
+        // skip the buildup wait (return true immediately after the status change).
+        if (unit.buildStatus !== BuildStatus.BuildDown) {
             unit.setBuildStatus(BuildStatus.BuildDown, this.game);
-            this.children.push(new WaitMinutesTask(this.game.rules.general.buildupTime));
-            return false;
+            if (!unit.rules.wall) {
+                this.children.push(new WaitMinutesTask(this.game.rules.general.buildupTime));
+                return false;
+            }
         }
         return true;
     }

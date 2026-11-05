@@ -4,9 +4,9 @@ export class DestroyedUnitsCondition extends TriggerCondition {
     private count: number = 0;
     private threshold: number;
     private houseId: number;
-    constructor(params: any, context: any) {
-        super(params, context);
-        this.threshold = Number(params[1]);
+    constructor(event: any, context: any) {
+        super(event, context);
+        this.threshold = Number(event.params[1]);
     }
     check(events: any, eventList: any[]): boolean {
         if (!this.player)

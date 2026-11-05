@@ -6,6 +6,7 @@ import { ZoneType } from "@/game/gameobject/unit/ZoneType";
 import { OBS_COUNTRY_ID } from "@/game/gameopts/constants";
 import { GameSpeed } from "@/game/GameSpeed";
 import { RadialTileFinder } from "@/game/map/tileFinder/RadialTileFinder";
+import { RadialBackFirstTileFinder } from "@/game/map/tileFinder/RadialBackFirstTileFinder";
 import { PowerupType } from "@/game/type/PowerupType";
 import { SpeedType } from "@/game/type/SpeedType";
 import { NotifyTick } from "@/game/trait/interface/NotifyTick";
@@ -16,10 +17,11 @@ import { Warhead } from "@/game/Warhead";
 import { CollisionType } from "@/game/gameobject/unit/CollisionType";
 import { RandomTileFinder } from "@/game/map/tileFinder/RandomTileFinder";
 import { OreSpread } from "@/game/map/OreSpread";
-import { OverlayTibType } from "@/engine/type/OverlayTibType";
+import { TiberiumType } from "@/engine/type/TiberiumType";
 import { TiberiumTrait } from "@/game/gameobject/trait/TiberiumTrait";
 import { Vector2 } from "@/game/math/Vector2";
 import { Box2 } from "@/game/math/Box2";
+import { SpecialWarheadType } from '@/game/SpecialWarheadType';
 export const UNSUPPORTED_POWERUP_TYPES = [
     PowerupType.IonStorm,
     PowerupType.Gas,
@@ -109,21 +111,44 @@ export class CrateGeneratorTrait implements NotifyTick {
     spawnCrateAtRandom(tiles: any[], gameState: any): boolean {
         const spawnTile = this.chooseSpawnTile(tiles, gameState);
         if (spawnTile) {
-            return this.spawnRandomCrateAt(spawnTile, gameState);
+            // 完善模拟层逻辑：random map crates are timed (regen lifetime).
+            return !!this.spawnRandomCrateAt(spawnTile, gameState, 0, true);
         }
         return false;
     }
-    spawnRandomCrateAt(tile: any, gameState: any): boolean {
+    spawnRandomCrateAt(tile: any, gameState: any, radius = 0, timed = false): boolean {
+        if (!this.canPlaceCrateOnTile(gameState, tile) && radius > 0) {
+            tile = new RadialBackFirstTileFinder(
+                gameState.map.tiles,
+                gameState.map.mapBounds,
+                tile,
+                { width: 1, height: 1 },
+                1,
+                radius,
+                (candidate: any) => this.canPlaceCrateOnTile(gameState, candidate),
+            ).getNextTile() ?? tile;
+        }
         if (this.canPlaceCrateOnTile(gameState, tile)) {
             const isWater = gameState.map.getTileZone(tile, true) === ZoneType.Water;
             const powerup = this.choosePowerup(isWater, gameState.rules.powerups.powerups, gameState);
             if (powerup) {
-                return !!this.spawnCrateAt(tile, powerup, gameState);
+                return !!this.spawnCrateAt(tile, powerup, gameState, radius, timed);
             }
         }
         return false;
     }
-    spawnCrateAt(tile: any, powerup: any, gameState: any): any {
+    spawnCrateAt(tile: any, powerup: any, gameState: any, radius = 0, timed = false): any {
+        if (!this.canPlaceCrateOnTile(gameState, tile) && radius > 0) {
+            tile = new RadialBackFirstTileFinder(
+                gameState.map.tiles,
+                gameState.map.mapBounds,
+                tile,
+                { width: 1, height: 1 },
+                1,
+                radius,
+                (candidate: any) => this.canPlaceCrateOnTile(gameState, candidate),
+            ).getNextTile() ?? tile;
+        }
         if (this.canPlaceCrateOnTile(gameState, tile)) {
             const isWater = gameState.map.getTileZone(tile, true) === ZoneType.Water;
             const crateRules = gameState.rules.crateRules;
@@ -132,8 +157,11 @@ export class CrateGeneratorTrait implements NotifyTick {
             crateObject.overlayId = gameState.rules.getOverlayId(crateImage);
             crateObject.value = 0;
             gameState.spawnObject(crateObject, tile);
-            const ticksLeft = 60 * crateRules.crateRegen * GameSpeed.BASE_TICKS_PER_SECOND *
-                (0.5 + 1.5 * gameState.generateRandom());
+            // 完善模拟层逻辑：only timed crates expire; otherwise infinite lifetime.
+            const ticksLeft = timed
+                ? 60 * crateRules.crateRegen * GameSpeed.BASE_TICKS_PER_SECOND *
+                    (0.5 + 1.5 * gameState.generateRandom())
+                : Number.POSITIVE_INFINITY;
             this.crates.push({
                 obj: crateObject,
                 powerup: powerup,
@@ -167,8 +195,9 @@ export class CrateGeneratorTrait implements NotifyTick {
         return selectedTile;
     }
     canPlaceCrateOnTile(gameState: any, tile: any): boolean {
+        // 完善模拟层逻辑：smudges do not block crate placement.
         return gameState.map.mapBounds.isWithinBounds(tile) &&
-            !gameState.map.getGroundObjectsOnTile(tile).length &&
+            !gameState.map.getGroundObjectsOnTile(tile).filter((obj: any) => !obj.isSmudge()).length &&
             gameState.map.terrain.getPassableSpeed(tile, SpeedType.Amphibious, false, false) > 0 &&
             tile.terrainType !== TerrainType.Shore &&
             tile.rampType === 0;
@@ -238,19 +267,19 @@ export class CrateGeneratorTrait implements NotifyTick {
                 success = true;
                 break;
             case PowerupType.Veteran:
-                success = this.grantVeteranPowerup(unit, powerup, tile, gameState, player);
+                success = this.grantVeteranPowerup(unit, powerup, tile, gameState);
                 break;
             case PowerupType.Armor:
-                success = this.grantArmorPowerup(unit, powerup, tile, gameState, player);
+                success = this.grantArmorPowerup(unit, powerup, tile, gameState);
                 break;
             case PowerupType.Firepower:
-                success = this.grantFirepowerPowerup(unit, powerup, tile, gameState, player);
+                success = this.grantFirepowerPowerup(unit, powerup, tile, gameState);
                 break;
             case PowerupType.Speed:
-                success = this.grantSpeedPowerup(unit, powerup, tile, gameState, player);
+                success = this.grantSpeedPowerup(unit, powerup, tile, gameState);
                 break;
             case PowerupType.Cloak:
-                success = this.grantCloakPowerup(unit, tile, gameState, player);
+                success = this.grantCloakPowerup(unit, tile, gameState);
                 break;
             case PowerupType.ICBM:
                 success = this.grantICBMPowerup(player, gameState);
@@ -343,6 +372,9 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         const amount = Math.floor(Number(powerup.data) * (0.55 + 2 * gameState.generateRandom() * 0.45));
         player.credits = Math.max(0, player.credits + amount);
+        if (amount > 0) {
+            player.creditsGained += amount;
+        }
         return true;
     }
     private grantHealBasePowerup(player: any, gameState: any): boolean {
@@ -353,20 +385,20 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         return true;
     }
-    private grantVeteranPowerup(unit: any, powerup: any, tile: any, gameState: any, player: any): boolean {
+    private grantVeteranPowerup(unit: any, powerup: any, tile: any, gameState: any): boolean {
         if (unit.veteranTrait && !unit.veteranTrait.isMaxLevel()) {
             const promotionLevel = Number(powerup.data);
-            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile, player)) {
+            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile)) {
                 targetUnit.veteranTrait?.promote(promotionLevel, gameState);
             }
             return true;
         }
         return false;
     }
-    private grantArmorPowerup(unit: any, powerup: any, tile: any, gameState: any, player: any): boolean {
+    private grantArmorPowerup(unit: any, powerup: any, tile: any, gameState: any): boolean {
         if (unit.crateBonuses.armor === 1) {
             const armorBonus = Number(powerup.data);
-            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile, player)) {
+            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile)) {
                 if (targetUnit.crateBonuses.armor === 1) {
                     targetUnit.crateBonuses.armor = armorBonus;
                 }
@@ -375,10 +407,10 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         return false;
     }
-    private grantFirepowerPowerup(unit: any, powerup: any, tile: any, gameState: any, player: any): boolean {
+    private grantFirepowerPowerup(unit: any, powerup: any, tile: any, gameState: any): boolean {
         if (unit.crateBonuses.firepower === 1) {
             const firepowerBonus = Number(powerup.data);
-            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile, player)) {
+            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile)) {
                 if (targetUnit.crateBonuses.firepower === 1) {
                     targetUnit.crateBonuses.firepower = firepowerBonus;
                 }
@@ -387,10 +419,10 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         return false;
     }
-    private grantSpeedPowerup(unit: any, powerup: any, tile: any, gameState: any, player: any): boolean {
+    private grantSpeedPowerup(unit: any, powerup: any, tile: any, gameState: any): boolean {
         if (unit.crateBonuses.speed === 1) {
             const speedBonus = Number(powerup.data);
-            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile, player)) {
+            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile)) {
                 if (targetUnit.crateBonuses.speed === 1) {
                     targetUnit.crateBonuses.speed = speedBonus;
                 }
@@ -399,9 +431,9 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         return false;
     }
-    private grantCloakPowerup(unit: any, tile: any, gameState: any, player: any): boolean {
+    private grantCloakPowerup(unit: any, tile: any, gameState: any): boolean {
         if (!unit.cloakableTrait) {
-            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile, player)) {
+            for (const targetUnit of this.getUnitsInCrateRadius(gameState, tile)) {
                 if (!targetUnit.cloakableTrait) {
                     targetUnit.cloakableTrait = new CloakableTrait(targetUnit, gameState.rules.general.cloakDelay);
                     gameState.addObjectTrait(targetUnit, targetUnit.cloakableTrait);
@@ -435,7 +467,7 @@ export class CrateGeneratorTrait implements NotifyTick {
             gameState.rules.combatDamage.flameDamage :
             gameState.rules.combatDamage.c4Warhead;
         const warhead = new Warhead(gameState.rules.getWarhead(warheadType));
-        warhead.detonate(gameState, damage, unit.tile, unit.tileElevation, unit.position.worldPosition, unit.zone, CollisionType.None, gameState.createTarget(unit, unit.tile), { player: unit.owner, weapon: undefined } as any, false, undefined, 0);
+        warhead.detonate(gameState, damage, unit.tile, unit.tileElevation, unit.position.worldPosition, unit.zone, CollisionType.None, gameState.createTarget(unit, unit.tile), { player: unit.owner, weapon: undefined } as any, SpecialWarheadType.None, undefined, 0);
         return true;
     }
     private grantTiberiumPowerup(tile: any, gameState: any): boolean {
@@ -444,7 +476,7 @@ export class CrateGeneratorTrait implements NotifyTick {
         let attempts = 0;
         let targetTile: any;
         while (attempts++ < 6 && (targetTile = tileFinder.getNextTile())) {
-            const overlayId = OreSpread.calculateOverlayId(OverlayTibType.Ore, targetTile);
+            const overlayId = OreSpread.calculateOverlayId(TiberiumType.Ore, targetTile);
             if (overlayId === undefined) {
                 throw new Error("Expected an overlayId");
             }
@@ -456,13 +488,11 @@ export class CrateGeneratorTrait implements NotifyTick {
         }
         return success;
     }
-    private getUnitsInCrateRadius(gameState: any, tile: any, player: any): any[] {
+    private getUnitsInCrateRadius(gameState: any, tile: any): any[] {
         const radius = gameState.rules.crateRules.crateRadius;
         const rangeHelper = new RangeHelper(gameState.map.tileOccupation);
         return gameState.map.technosByTile
             .queryRange(new Box2().setFromCenterAndSize(new Vector2(tile.rx, tile.ry), new Vector2(radius, radius)))
-            .filter((unit: any) => unit.owner === player &&
-            unit.isUnit() &&
-            rangeHelper.tileDistance(unit, tile) <= radius);
+            .filter((unit: any) => unit.isUnit() && rangeHelper.tileDistance(unit, tile) <= radius);
     }
 }

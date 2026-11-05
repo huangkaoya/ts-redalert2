@@ -44,10 +44,12 @@ export class Task {
                     this.children.forEach(child => child.cancel());
                 }
             }
-            else if (this.status === TaskStatus.NotStarted &&
-                this.children.length) {
+            else if (this.status === TaskStatus.NotStarted) {
+                // 完善模拟层逻辑：always mark Cancelled first; only throw if children already exist.
                 this.status = TaskStatus.Cancelled;
-                throw new Error("Should't have any children before starting a task");
+                if (this.children.length) {
+                    throw new Error("Should't have any children before starting a task");
+                }
             }
         }
     }

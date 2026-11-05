@@ -28,7 +28,7 @@ export class AttackMoveOrder extends AttackOrder {
         }
         let isAllowed = this.isAllowed();
         if (isAllowed) {
-            const hasBridge = !!this.target.getBridgeFor(this.sourceObject);
+            const hasBridge = !!this.target.getBridge();
             const speedType = this.sourceObject.rules.speedType;
             const isInfantry = this.sourceObject.isInfantry();
             const canFly = this.sourceObject.rules.movementZone === MovementZone.Fly;
@@ -70,7 +70,7 @@ export class AttackMoveOrder extends AttackOrder {
             return [new AttackMoveTargetTask(this.game, this.target, weapon)];
         }
         return [
-            new AttackMoveTask(this.game, this.target.tile, !!this.target.getBridgeFor(this.sourceObject), { closeEnoughTiles: this.game.rules.general.closeEnough })
+            new AttackMoveTask(this.game, this.target.tile, !!this.target.getBridge(), { closeEnoughTiles: this.game.rules.general.closeEnough })
         ];
     }
     isTargetted(): boolean {
@@ -88,18 +88,20 @@ export class AttackMoveOrder extends AttackOrder {
                             unit.isAircraft() ||
                             existingTask.constructor !== MoveTask) &&
                             existingTask.forceCancel(unit)) {
-                            taskList.splice(taskList.indexOf(existingTask), 1);
+                            // 完善模拟层逻辑：splice(index) drops cancelled task and everything after it.
+                            taskList.splice(taskList.indexOf(existingTask));
                         }
                     }
                     else {
                         if (existingTask.constructor === AttackMoveTask) {
-                            existingTask.updateTarget(this.target.tile, !!this.target.getBridgeFor(this.sourceObject));
+                            existingTask.updateTarget(this.target.tile, !!this.target.getBridge());
                             taskList.splice(taskList.indexOf(existingTask) + 1);
                             unit.unitOrderTrait.clearOrders();
                             return false;
                         }
                         if (existingTask.forceCancel(unit)) {
-                            taskList.splice(taskList.indexOf(existingTask), 1);
+                            // 完善模拟层逻辑：splice(index) drops cancelled task and everything after it.
+                            taskList.splice(taskList.indexOf(existingTask));
                         }
                     }
                 }

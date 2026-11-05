@@ -20,40 +20,70 @@ export class DebugAction extends Action {
         super(ActionType.DebugCommand);
         this.game = game;
     }
-    unserialize(data: Uint8Array): void {
+    static decodePayload(data: Uint8Array): {
+        commandType: DebugCommandType;
+        params?: { unitId?: number; label?: string; text?: string };
+    } {
         const stream = new DataStream(data);
-        const type = stream.readUint8();
-        if (type === DebugCommandType.SetUnitDebugText) {
-            this.command = new DebugCommand(type, {
-                unitId: stream.readUint32(),
-                label: stream.readCString() || undefined
-            });
+        const commandType = stream.readUint8();
+        if (commandType === DebugCommandType.SetUnitDebugText) {
+            return {
+                commandType,
+                params: {
+                    unitId: stream.readUint32(),
+                    label: stream.readCString() || undefined,
+                },
+            };
         }
-        else if (type === DebugCommandType.SetGlobalDebugText) {
-            this.command = new DebugCommand(type, {
-                text: stream.readCString()
-            });
+        if (commandType === DebugCommandType.SetGlobalDebugText) {
+            return {
+                commandType,
+                params: {
+                    text: stream.readCString(),
+                },
+            };
+        }
+        return {
+            commandType,
+            params: undefined,
+        };
+    }
+    static encodePayload(payload: {
+        commandType: DebugCommandType;
+        params?: { unitId?: number; label?: string; text?: string };
+    }): Uint8Array {
+        const stream = new DataStream();
+        stream.writeUint8(payload.commandType);
+        if (payload.commandType === DebugCommandType.SetUnitDebugText) {
+            const params = payload.params!;
+            stream.writeUint32(params.unitId!);
+            stream.writeCString(params.label || '');
+        }
+        else if (payload.commandType === DebugCommandType.SetGlobalDebugText) {
+            stream.writeCString(payload.params!.text!);
         }
         else {
-            console.warn(`Debug command ${type} not implemented`);
+            throw new Error(`Debug command ${payload.commandType} not implemented`);
+        }
+        return stream.toUint8Array();
+    }
+    unserialize(data: Uint8Array): void {
+        const payload = DebugAction.decodePayload(data);
+        if (
+            payload.commandType === DebugCommandType.SetUnitDebugText ||
+            payload.commandType === DebugCommandType.SetGlobalDebugText
+        ) {
+            this.command = new DebugCommand(payload.commandType, payload.params);
+        }
+        else {
+            console.warn(`Debug command ${payload.commandType} not implemented`);
         }
     }
     serialize(): Uint8Array {
-        const stream = new DataStream();
-        stream.writeUint8(this.command.type);
-        if (this.command.type === DebugCommandType.SetUnitDebugText) {
-            const { unitId, label } = this.command.params;
-            stream.writeUint32(unitId);
-            stream.writeCString(label || '');
-        }
-        else if (this.command.type === DebugCommandType.SetGlobalDebugText) {
-            const { text } = this.command.params;
-            stream.writeCString(text);
-        }
-        else {
-            throw new Error(`Debug command ${this.command.type} not implemented`);
-        }
-        return stream.toUint8Array();
+        return DebugAction.encodePayload({
+            commandType: this.command.type,
+            params: this.command.params,
+        });
     }
     process(): void {
         if (this.command.type === DebugCommandType.SetUnitDebugText) {

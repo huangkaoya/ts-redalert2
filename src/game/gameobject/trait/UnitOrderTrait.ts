@@ -106,14 +106,14 @@ export class UnitOrderTrait implements NotifyTick, NotifyOwnerChange, NotifyTele
         }
         let targetTask = currentTask;
         while (targetTask?.useChildTargetLines) {
-            const childTask = targetTask.children?.find(child => !child.isCancelling());
+            const childTask = targetTask.children.find(child => !child.isCancelling());
             if (!childTask)
                 break;
             targetTask = childTask;
         }
         if (this.targetLinesTask !== targetTask) {
             this.targetLinesTask = targetTask;
-            this.targetLinesConfig = targetTask?.getTargetLinesConfig?.(this.gameObject);
+            this.targetLinesConfig = targetTask?.getTargetLinesConfig(this.gameObject);
         }
     }
     [NotifyOwnerChange.onChange](): void {
@@ -194,19 +194,20 @@ export class UnitOrderTrait implements NotifyTick, NotifyOwnerChange, NotifyTele
         this.gameObject = undefined as any;
     }
     private cleanupWaypointPath(): void {
-        if (!this.waypointPath)
-            return;
-        const unitIndex = this.waypointPath.units.indexOf(this.gameObject);
-        if (unitIndex !== -1) {
-            this.waypointPath.units.splice(unitIndex, 1);
+        // 完善模拟层逻辑：always splice(indexOf(...), 1) with no -1 guard.
+        if (this.waypointPath) {
+            this.waypointPath.units.splice(
+                this.waypointPath.units.indexOf(this.gameObject),
+                1,
+            );
+            if (!this.waypointPath.units.length) {
+                this.waypointPath.waypoints.forEach((waypoint) => {
+                    waypoint.next = undefined;
+                });
+                this.waypointPath.waypoints.length = 0;
+            }
+            this.waypointPath = undefined;
         }
-        if (this.waypointPath.units.length === 0) {
-            this.waypointPath.waypoints.forEach(waypoint => {
-                waypoint.next = undefined;
-            });
-            this.waypointPath.waypoints.length = 0;
-        }
-        this.waypointPath = undefined;
         this.currentWaypoint = undefined;
     }
     private cleanupWaypoint(waypoint: Waypoint, waypointPath: WaypointPath): void {

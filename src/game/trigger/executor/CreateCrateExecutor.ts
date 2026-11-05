@@ -37,17 +37,19 @@ export class CreateCrateExecutor extends TriggerExecutor {
                 `Skipping action ${this.getDebugName()}.`);
             return;
         }
+        // 完善模拟层逻辑：search nearby radius 3; timed lifetime follows cratesAppear.
+        const cratesAppear = game.gameOpts.cratesAppear;
         if (powerupTypeMap.has(typeId)) {
             const powerupType = powerupTypeMap.get(typeId);
             const powerup = typeof powerupType === 'function'
                 ? powerupType(game)
                 : game.rules.powerups.powerups.find((p: any) => p.type === powerupType);
             if (powerup) {
-                game.crateGeneratorTrait.spawnCrateAt(tile, powerup, game);
+                game.crateGeneratorTrait.spawnCrateAt(tile, powerup, game, 3, cratesAppear);
             }
         }
         else {
-            game.crateGeneratorTrait.spawnRandomCrateAt(tile, game);
+            game.crateGeneratorTrait.spawnRandomCrateAt(tile, game, 3, cratesAppear);
         }
     }
 }

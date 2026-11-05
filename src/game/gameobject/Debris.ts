@@ -2,6 +2,7 @@ import { GameObject } from './GameObject';
 import { ObjectType } from '@/engine/type/ObjectType';
 import { ZoneType } from './unit/ZoneType';
 import { Warhead } from '../Warhead';
+import { SpecialWarheadType } from '@/game/SpecialWarheadType';
 import { FacingUtil } from './unit/FacingUtil';
 import { AnimTerrainEffect } from './common/AnimTerrainEffect';
 import { CollisionHelper } from './unit/CollisionHelper';
@@ -60,7 +61,7 @@ export class Debris extends GameObject {
             ground: true,
             shore: false,
             walls: true,
-            units: () => false,
+            units: false,
         });
         if (collisionType) {
             const isGroundCollision = [
@@ -111,7 +112,7 @@ export class Debris extends GameObject {
         gameContext.destroyObject(this);
         if (warhead) {
             const warheadInstance = new Warhead(warhead);
-            warheadInstance.detonate(gameContext, this.rules.damage, this.tile, this.tileElevation, this.position.worldPosition, this.zone, collisionType, gameContext.createTarget(undefined, this.tile), undefined, false, undefined, this.rules.damageRadius || undefined, true);
+            warheadInstance.detonate(gameContext, this.rules.damage, this.tile, this.tileElevation, this.position.worldPosition, this.zone, collisionType, gameContext.createTarget(undefined, this.tile), undefined, SpecialWarheadType.None, undefined, this.rules.damageRadius || undefined, true);
         }
     }
 }

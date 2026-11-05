@@ -34,13 +34,6 @@ export class EnterTransportOrder extends Order {
     isAllowed(): boolean {
         const target = this.target.obj;
         const source = this.sourceObject;
-        // A unit stacked on a different layer than the transport (e.g. on a bridge
-        // deck while the transport floats in the water directly below) cannot board
-        // it — show NoOccupy instead of letting it teleport-board across layers.
-        if (this.game.map.tileOccupation.isTileOccupiedBy(source.tile, target) &&
-            !!source.onBridge !== !!target.onBridge) {
-            return false;
-        }
         return (source.zone !== ZoneType.Air &&
             target.zone !== ZoneType.Air &&
             target.transportTrait.unitFitsInside(source) &&

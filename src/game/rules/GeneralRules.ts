@@ -42,6 +42,7 @@ export class GeneralRules {
     public aircraftFogReveal!: number;
     public flightLevel!: number;
     public alliedDisguise!: string;
+    public thirdDisguise!: string;
     public sovietDisguise!: string;
     public defaultMirageDisguises!: string[];
     public cloakDelay!: number;
@@ -67,8 +68,10 @@ export class GeneralRules {
     public maxWaypointPathLength!: number;
     public engineer!: string;
     public engineerCaptureLevel!: number;
+    public engineerCaptureDelay!: number;
     public engineerDamage!: number;
     public engineerAlwaysCaptureTech!: boolean;
+    public engineerTechSecureTime!: number;
     public technician!: string;
     public harvesterTooFarDistance!: number;
     public harvesterUnit!: string[];
@@ -120,8 +123,10 @@ export class GeneralRules {
         this.dropPodWeapon = ini.getString('DropPodWeapon');
         this.engineer = ini.getString('Engineer');
         this.engineerCaptureLevel = ini.getFixed('EngineerCaptureLevel', 0.25);
+        this.engineerCaptureDelay = ini.getNumber('EngineerCaptureDelay', 12);
         this.engineerDamage = ini.getFixed('EngineerDamage', 0.437);
         this.engineerAlwaysCaptureTech = ini.getBool('EngineerAlwaysCaptureTech', true);
+        this.engineerTechSecureTime = ini.getNumber('EngineerTechSecureTime', 4);
         this.flightLevel = ini.getNumber('FlightLevel');
         this.guardAreaTargetingDelay = ini.getNumber('GuardAreaTargetingDelay');
         this.harvesterTooFarDistance = ini.getNumber('HarvesterTooFarDistance');
@@ -149,6 +154,7 @@ export class GeneralRules {
         this.revealTriggerRadius = Math.min(10, ini.getNumber('RevealTriggerRadius'));
         this.shipSinkingWeight = ini.getNumber('ShipSinkingWeight');
         this.sovietDisguise = ini.getString('SovietDisguise');
+        this.thirdDisguise = ini.getString('ThirdDisguise');
         this.spyMoneyStealPercent = ini.getNumber('SpyMoneyStealPercent');
         this.spyPowerBlackout = ini.getNumber('SpyPowerBlackout');
         this.technician = ini.getString('Technician');

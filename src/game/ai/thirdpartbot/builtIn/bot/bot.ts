@@ -251,7 +251,7 @@ export class BuiltInBot extends Bot {
         this._globalDebugText = globalDebugText;
     }
 
-    override onGameEvent(ev: ApiEvent) {
+    override onGameEvent(ev: ApiEvent, _gameApi?: GameApi) {
         switch (ev.type) {
             case ApiEventType.ObjectDestroy: {
                 // Add to the stalemate detection.

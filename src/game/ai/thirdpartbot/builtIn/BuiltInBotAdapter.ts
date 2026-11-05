@@ -30,24 +30,9 @@ export class BuiltInBotAdapter extends Bot {
         this.innerBot = new BuiltInBot(name, country as Countries);
     }
 
-    override setGameApi(api: any): void {
-        super.setGameApi(api);
-        this.innerBot.setGameApi(api);
-    }
-
-    override setActionsApi(api: any): void {
-        super.setActionsApi(api);
-        this.innerBot.setActionsApi(api);
-    }
-
-    override setProductionApi(api: any): void {
-        super.setProductionApi(api);
-        this.innerBot.setProductionApi(api);
-    }
-
-    override setLogger(logger: any): void {
-        super.setLogger(logger);
-        this.innerBot.setLogger(logger);
+    override setContext(context: any): void {
+        super.setContext(context);
+        this.innerBot.setContext(context);
     }
 
     override setDebugMode(debug: boolean): Bot {
@@ -81,9 +66,9 @@ export class BuiltInBotAdapter extends Bot {
         this.runFailSafeTick(event);
     }
 
-    override onGameEvent(event: any): void {
+    override onGameEvent(event: any, gameApi?: any): void {
         try {
-            this.innerBot.onGameEvent(event);
+            this.innerBot.onGameEvent(event, gameApi);
         } catch (e) {
             this.logger?.error?.('BuiltInBot event error:', e);
         }
@@ -212,7 +197,7 @@ export class BuiltInBotAdapter extends Bot {
 
         if (nextBuild) {
             try {
-                this.actionsApi.queueForProduction(QueueType.Structures, ObjectType.Building, nextBuild, 1);
+                this.actionsApi.queueForProduction(QueueType.Structures, nextBuild, ObjectType.Building, 1);
                 this.failSafePendingBuildingType = nextBuild;
             } catch (err) {
                 this.logger?.error?.('BuiltIn fail-safe queueForProduction failed', nextBuild, err);

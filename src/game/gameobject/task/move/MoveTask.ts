@@ -3,6 +3,7 @@ import { Infantry } from "@/game/gameobject/Infantry";
 import { MovementZone } from "@/game/type/MovementZone";
 import { findIndexReverse, findReverse } from "@/util/array";
 import { SpeedType } from "@/game/type/SpeedType";
+import { LocomotorType } from "@/game/type/LocomotorType";
 import { MoveState, CollisionState, MoveResult, MoveTrait } from "@/game/gameobject/trait/MoveTrait";
 import { WaitTicksTask } from "@/game/gameobject/task/system/WaitTicksTask";
 import { MoveAsideTask } from "@/game/gameobject/task/move/MoveAsideTask";
@@ -13,7 +14,7 @@ import AppLogger from "@/util/logger";
 const Logger = AppLogger;
 import { Coords } from "@/game/Coords";
 import { TaskStatus } from "@/game/gameobject/task/system/TaskStatus";
-import { getZoneType, ZoneType } from "@/game/gameobject/unit/ZoneType";
+import { ZoneType } from "@/game/gameobject/unit/ZoneType";
 import { LocomotorFactory } from "@/game/gameobject/locomotor/LocomotorFactory";
 import { RandomTileFinder } from "@/game/map/tileFinder/RandomTileFinder";
 import { ObjectTeleportEvent } from "@/game/event/ObjectTeleportEvent";
@@ -29,7 +30,6 @@ import type { Bridge } from "@/game/gameobject/Bridge";
 import type { Unit } from "@/game/gameobject/Unit";
 import type { Locomotor } from "@/game/gameobject/locomotor/Locomotor";
 import type { Weapon } from "@/game/gameobject/Weapon";
-import { Target } from "@/game/Target";
 const VELOCITY_FACTOR = 1.5;
 const MAX_PLANNING_TICKS = 200;
 const WAIT_TICKS = 40;
@@ -77,7 +77,11 @@ export class MoveTask extends Task {
     private destinationLeptons: Vector2;
     private currentWaypointLeptons: Vector2;
     private needsPathUpdate = false;
-    private targetChangeRequested = false;
+    private targetChangeRequested?: {
+        tile: Tile;
+        toBridge: boolean;
+        onlyIfPathExists?: boolean;
+    };
     private allObstaclesAreBlockers = false;
     private blockedPathNodes: BlockedPathNode[] = [];
     private unreachableTargets: UnreachableTarget[] = [];
@@ -119,7 +123,6 @@ export class MoveTask extends Task {
         if (unit.moveTrait.locomotor === undefined) {
             unit.moveTrait.locomotor = new LocomotorFactory(this.game).create(unit);
         }
-        this.ensureGroundLayerUnderBridge(unit);
         if (unit.moveTrait.lastTargetOffset) {
             this.targetOffset = unit.moveTrait.lastTargetOffset;
         }
@@ -156,21 +159,26 @@ export class MoveTask extends Task {
                 ? unit.position.getTileOffset()
                 : unit.position.computeSubCellOffset(0));
     }
-    private computePath(unit: Unit, locomotor: Locomotor): void {
+    private computePath(unit: Unit, locomotor: Locomotor, onlyIfPathExists = false): boolean {
         let path: PathNode[];
-        if (!this.options?.allowOutOfBoundsTarget &&
-            !this.game.map.mapBounds.isWithinBounds(this.targetTile)) {
-            path = [];
-        }
-        else if (unit.rules.movementZone === MovementZone.Fly) {
-            path = this.computeAirPath(unit);
-        }
-        else if ((locomotor as any).ignoresTerrain) {
-            path = this.computeDirectJumpPath(unit);
+        if (this.options?.allowOutOfBoundsTarget ||
+            this.game.map.mapBounds.isWithinBounds(this.targetTile)) {
+            if (unit.rules.movementZone === MovementZone.Fly) {
+                path = this.computeAirPath(unit);
+            }
+            else if ((locomotor as any).ignoresTerrain) {
+                path = this.computeDirectJumpPath(unit);
+            }
+            else {
+                const plan = this.computeGroundPath(unit);
+                if (onlyIfPathExists && !plan.path.length) {
+                    return false;
+                }
+                path = this.applyGroundPathPlan(plan);
+            }
         }
         else {
-            const plan = this.computeGroundPath(unit);
-            path = this.applyGroundPathPlan(plan);
+            path = [];
         }
         if (unit.rules.movementZone === MovementZone.Fly) {
             this.targetLinesConfig.pathNodes = path.map(({ tile, onBridge }) => ({
@@ -187,6 +195,7 @@ export class MoveTask extends Task {
             this.targetLinesConfig.pathNodes = path;
         }
         this.path = path;
+        return true;
     }
     private computeAirPath(unit: Unit): PathNode[] {
         return [
@@ -196,22 +205,18 @@ export class MoveTask extends Task {
     }
     private computeDirectJumpPath(unit: Unit): PathNode[] {
         const map = this.game.map;
-        const canUseBridgeLayer = !Target.usesGroundLayerUnderBridge(unit);
-        const unitBridge = canUseBridgeLayer && unit.onBridge
+        const unitBridge = unit.onBridge
             ? map.tileOccupation.getBridgeOnTile(unit.tile)
             : undefined;
         let targetTile = this.targetTile;
-        let targetBridge = canUseBridgeLayer && this.toBridge
+        let targetBridge = this.toBridge
             ? map.tileOccupation.getBridgeOnTile(this.targetTile)
             : undefined;
         const ignoredBlockers = this.options?.ignoredBlockers;
         const finder = new RadialTileFinder(map.tiles, map.mapBounds, targetTile, { width: 1, height: 1 }, 0, 5, (tile) => {
-            const bridge = canUseBridgeLayer
-                ? map.tileOccupation.getBridgeOnTile(tile)
-                : undefined;
-            return (map.terrain.getPassableSpeed(tile, unit.rules.speedType, unit.isInfantry(), !!bridge, ignoredBlockers) > 0 &&
+            return (map.terrain.getPassableSpeed(tile, unit.rules.speedType, unit.isInfantry(), !!tile.onBridgeLandType, ignoredBlockers) > 0 &&
                 !map.terrain
-                    .findObstacles({ tile, onBridge: bridge }, unit)
+                    .findObstacles({ tile, onBridge: !!tile.onBridgeLandType as any }, unit)
                     .find((obstacle) => !ignoredBlockers?.includes(obstacle.obj)));
         });
         const newTile = finder.getNextTile();
@@ -220,9 +225,7 @@ export class MoveTask extends Task {
         }
         if (newTile !== targetTile) {
             targetTile = newTile;
-            targetBridge = canUseBridgeLayer
-                ? map.tileOccupation.getBridgeOnTile(targetTile)
-                : undefined;
+            targetBridge = map.tileOccupation.getBridgeOnTile(targetTile);
         }
         return [
             { tile: targetTile, onBridge: targetBridge },
@@ -230,17 +233,14 @@ export class MoveTask extends Task {
         ];
     }
     private computeGroundPath(unit: Unit): GroundPathPlan {
-        const forceGroundLayer = Target.usesGroundLayerUnderBridge(unit);
         let startTile = unit.tile;
-        let startBridge = !forceGroundLayer && unit.onBridge
+        let startBridge = unit.onBridge
             ? this.game.map.tileOccupation.getBridgeOnTile(startTile)
             : undefined;
         if (unit.moveTrait.moveState === MoveState.Moving &&
             unit.moveTrait.currentWaypoint) {
             startTile = unit.moveTrait.currentWaypoint.tile;
-            startBridge = forceGroundLayer
-                ? undefined
-                : unit.moveTrait.currentWaypoint.onBridge;
+            startBridge = unit.moveTrait.currentWaypoint.onBridge;
         }
         const plan: GroundPathPlan = {
             path: [],
@@ -282,37 +282,30 @@ export class MoveTask extends Task {
                 obj: disguisedUnit
             });
         }
-        const allIgnoredBlockers = [
+        const ignoredBlockers = [
             ...new Set([
                 ...(this.options?.ignoredBlockers ?? []),
-                ...(this.options?.pathFinderIgnoredBlockers ?? []),
                 ...plan.ignoredBlockers
             ])
         ];
         const allBlockedNodes = [...this.blockedPathNodes, ...plan.blockedPathNodes];
-        const hasExcludedNodes = forceGroundLayer || this.allObstaclesAreBlockers || !!allBlockedNodes.length;
-        const path = this.game.map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), startTile, !!startBridge, this.targetTile, forceGroundLayer ? false : this.toBridge, {
+        const path = this.game.map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), startTile, !!startBridge, this.targetTile, this.toBridge, {
             maxExpandedNodes: this.allObstaclesAreBlockers
                 ? Math.min(300, this.options?.maxExpandedPathNodes ?? Number.POSITIVE_INFINITY)
                 : this.options?.maxExpandedPathNodes,
             bestEffort: !this.options?.strictCloseEnough,
-            ignoredBlockers: allIgnoredBlockers,
-            excludeTiles: hasExcludedNodes
-                ? (node) => (forceGroundLayer && !!node.onBridge) ||
-                    ((this.allObstaclesAreBlockers || !!allBlockedNodes.length) &&
-                        this.nodeIsBlockedForPathfinding(node, unit, allIgnoredBlockers, allBlockedNodes))
+            ignoredBlockers: [
+                ...new Set([
+                    ...ignoredBlockers,
+                    ...(this.options?.pathFinderIgnoredBlockers ?? [])
+                ])
+            ],
+            excludeTiles: this.allObstaclesAreBlockers || allBlockedNodes.length
+                ? (node) => this.nodeIsBlockedForPathfinding(node, unit, ignoredBlockers, allBlockedNodes)
                 : undefined
         });
         plan.path = path;
         return plan;
-    }
-    private ensureGroundLayerUnderBridge(unit: Unit): void {
-        if (!Target.usesGroundLayerUnderBridge(unit) || !unit.onBridge) {
-            return;
-        }
-        unit.onBridge = false;
-        unit.position.tileElevation = 0;
-        unit.zone = getZoneType(unit.tile.landType);
     }
     private nodeIsBlockedForPathfinding(node: PathNode, unit: Unit, ignoredBlockers: GameObject[], blockedNodes: BlockedPathNode[]): boolean {
         if (this.allObstaclesAreBlockers) {
@@ -399,11 +392,13 @@ export class MoveTask extends Task {
     protected hasReachedDestination(unit: Unit): boolean {
         return !this.path!.length;
     }
-    updateTarget(tile: Tile, toBridge: boolean): void {
-        this.targetTile = tile;
-        this.toBridge = toBridge;
+    updateTarget(tile: Tile, toBridge: boolean, onlyIfPathExists = false): void {
         this.needsPathUpdate = true;
-        this.targetChangeRequested = true;
+        this.targetChangeRequested = {
+            tile,
+            toBridge,
+            onlyIfPathExists
+        };
     }
     onEnd(unit: Unit): void {
         unit.moveTrait.collisionState = CollisionState.Resolved;
@@ -440,7 +435,6 @@ export class MoveTask extends Task {
             return false;
         }
         if (this.needsPathUpdate) {
-            this.ensureGroundLayerUnderBridge(unit);
             if (unit.moveTrait.moveState === MoveState.PlanMove) {
                 this.inPlanningForTicks = undefined;
                 unit.moveTrait.currentWaypoint = undefined;
@@ -448,18 +442,30 @@ export class MoveTask extends Task {
                 unit.moveTrait.moveState = MoveState.ReachedNextWaypoint;
                 unit.moveTrait.velocity.set(0, 0, 0);
             }
-            this.computePath(unit, unit.moveTrait.locomotor);
-            if (!this.path!.length) {
-                this.unreachableTargets.push({
-                    tile: this.targetTile,
-                    toBridge: this.toBridge
-                });
+            const previousTargetTile = this.targetTile;
+            const previousToBridge = this.toBridge;
+            if (this.targetChangeRequested) {
+                this.targetTile = this.targetChangeRequested.tile;
+                this.toBridge = this.targetChangeRequested.toBridge;
             }
-            this.updateDestination(this.path!, this.targetOffset!);
+            if (this.computePath(unit, unit.moveTrait.locomotor, this.targetChangeRequested?.onlyIfPathExists)) {
+                if (!this.path!.length) {
+                    this.unreachableTargets.push({
+                        tile: this.targetTile,
+                        toBridge: this.toBridge
+                    });
+                }
+                this.updateDestination(this.path!, this.targetOffset!);
+                this.allObstaclesAreBlockers = false;
+            }
+            else {
+                this.targetTile = previousTargetTile;
+                this.toBridge = previousToBridge;
+                this.targetLinesConfig.pathNodes = [...this.targetLinesConfig.pathNodes];
+            }
             this.targetLinesConfig.isRecalc = !this.targetChangeRequested;
-            this.targetChangeRequested = false;
+            this.targetChangeRequested = undefined;
             this.needsPathUpdate = false;
-            this.allObstaclesAreBlockers = false;
         }
         const map = this.game.map;
         if (unit.moveTrait.moveState === MoveState.ReachedNextWaypoint) {
@@ -487,12 +493,12 @@ export class MoveTask extends Task {
                     return true;
                 }
                 let relocTile = unit.tile;
-                let relocBridge = !Target.usesGroundLayerUnderBridge(unit) && unit.onBridge
+                let relocBridge = unit.onBridge
                     ? map.tileOccupation.getBridgeOnTile(relocTile)
                     : undefined;
                 if (notCloseEnough) {
                     relocTile = this.targetTile;
-                    relocBridge = !Target.usesGroundLayerUnderBridge(unit) && this.toBridge
+                    relocBridge = this.toBridge
                         ? map.tileOccupation.getBridgeOnTile(relocTile)
                         : undefined;
                 }
@@ -504,8 +510,7 @@ export class MoveTask extends Task {
                     this.log(unit, "bail_no_free_dest");
                     return true;
                 }
-                const newBridge = !Target.usesGroundLayerUnderBridge(unit) &&
-                    (!relocBridge || relocBridge.isHighBridge())
+                const newBridge = !relocBridge || relocBridge.isHighBridge()
                     ? map.tileOccupation.getBridgeOnTile(newTile)
                     : undefined;
                 this.updateTarget(newTile, !!newBridge);
@@ -560,12 +565,6 @@ export class MoveTask extends Task {
                 for (const node of pathToCheck) {
                     if (node.onBridge?.isDestroyed) {
                         node.onBridge = undefined;
-                    }
-                    if (Target.usesGroundLayerUnderBridge(unit) && node.onBridge) {
-                        this.needsPathUpdate = true;
-                        unit.moveTrait.currentWaypoint = undefined;
-                        unit.moveTrait.moveState = MoveState.ReachedNextWaypoint;
-                        return this.onTick(unit);
                     }
                 }
                 for (const node of pathToCheck) {
@@ -713,14 +712,12 @@ export class MoveTask extends Task {
                             let alternatePath: PathNode[] = [];
                             if (freeWaypointIndex !== -1) {
                                 const targetWaypoint = this.path![freeWaypointIndex];
-                                const forceGroundLayer = Target.usesGroundLayerUnderBridge(unit);
-                                alternatePath = map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), unit.tile, forceGroundLayer ? false : unit.onBridge, targetWaypoint.tile, forceGroundLayer ? false : !!targetWaypoint.onBridge, {
+                                alternatePath = map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), unit.tile, unit.onBridge, targetWaypoint.tile, !!targetWaypoint.onBridge, {
                                     maxExpandedNodes: 15,
                                     bestEffort: false,
-                                    excludeTiles: (testNode) => (forceGroundLayer && !!testNode.onBridge) ||
-                                        !!map.terrain
-                                            .findObstacles(testNode, unit)
-                                            .filter((obstacle) => !this.options?.ignoredBlockers?.includes(obstacle.obj)).length,
+                                    excludeTiles: (testNode) => !!map.terrain
+                                        .findObstacles(testNode, unit)
+                                        .filter((obstacle) => !this.options?.ignoredBlockers?.includes(obstacle.obj)).length,
                                     ignoredBlockers: this.options?.ignoredBlockers
                                 });
                             }
@@ -819,12 +816,10 @@ export class MoveTask extends Task {
                                 const backtrackIndex = findIndexReverse(this.path!.slice(0, nodeIndex - 5), (waypoint) => !map.terrain.findObstacles(waypoint, unit).length);
                                 if (backtrackIndex !== -1) {
                                     const backtrackTarget = this.path![backtrackIndex];
-                                    const forceGroundLayer = Target.usesGroundLayerUnderBridge(unit);
-                                    const backtrackPath = map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), unit.tile, forceGroundLayer ? false : unit.onBridge, backtrackTarget.tile, forceGroundLayer ? false : !!backtrackTarget.onBridge, {
+                                    const backtrackPath = map.terrain.computePath(unit.rules.speedType, unit.isInfantry(), unit.tile, unit.onBridge, backtrackTarget.tile, !!backtrackTarget.onBridge, {
                                         maxExpandedNodes: 15,
                                         bestEffort: false,
-                                        excludeTiles: (testNode) => (forceGroundLayer && !!testNode.onBridge) ||
-                                            !!map.terrain.findObstacles(testNode, unit).length ||
+                                        excludeTiles: (testNode) => !!map.terrain.findObstacles(testNode, unit).length ||
                                             this.path!.findIndex((waypoint) => waypoint.tile === testNode.tile &&
                                                 waypoint.onBridge === testNode.onBridge) > backtrackIndex
                                     });
@@ -897,18 +892,18 @@ export class MoveTask extends Task {
                     unit.position.moveByLeptons(distance.x, distance.z, allowOutOfBounds);
                 }
                 if (unit.tile !== oldTile) {
-                    const canUseBridgeLayer = !Target.usesGroundLayerUnderBridge(unit);
-                    const oldBridge = canUseBridgeLayer && unit.onBridge
+                    const oldBridge = unit.onBridge
                         ? this.game.map.tileOccupation.getBridgeOnTile(oldTile)
                         : undefined;
                     const currentNode = findReverse(this.path!, (node) => node.tile === unit.tile);
-                    const newBridge = canUseBridgeLayer
-                        ? currentNode
-                            ? currentNode.onBridge
-                            : oldBridge || unit.moveTrait.currentWaypoint!.onBridge
-                                ? this.game.map.tileOccupation.getBridgeOnTile(unit.tile)
-                                : undefined
-                        : undefined;
+                    let newBridge = currentNode
+                        ? currentNode.onBridge
+                        : oldBridge || unit.moveTrait.currentWaypoint!.onBridge
+                            ? this.game.map.tileOccupation.getBridgeOnTile(unit.tile)
+                            : undefined;
+                    if (newBridge?.isDestroyed) {
+                        newBridge = undefined;
+                    }
                     unit.moveTrait.handleTileChange(oldTile, newBridge, false, this.game, isTeleport);
                     if (isTeleport) {
                         unit.moveTrait.lastTeleportTick = this.game.currentTick;
@@ -949,7 +944,9 @@ export class MoveTask extends Task {
                 .getGroundObjectsOnTile(tile)
                 .some((obj) => (obj.isBuilding() && !obj.isDestroyed) ||
                 obj.isTerrain() ||
-                (obj.isOverlay() && obj.rules.isARock));
+                (obj.isOverlay() && obj.rules.isARock)) &&
+                (unit.rules.locomotor !== LocomotorType.Jumpjet ||
+                    map.terrain.getPassableSpeed(tile, SpeedType.Amphibious, unit.isInfantry(), !!tile.onBridgeLandType) > 0);
             const randomFinder = new RandomTileFinder(map.tiles, map.mapBounds, preferredTile, 1, this.game, isValidTile);
             let relocTile = randomFinder.getNextTile();
             if (!relocTile) {
@@ -959,17 +956,14 @@ export class MoveTask extends Task {
             return relocTile;
         }
         else {
-            const forceGroundLayer = Target.usesGroundLayerUnderBridge(unit);
-            const unitOnBridge = forceGroundLayer ? false : unit.onBridge;
             const islandMap = !this.options?.ignoredBlockers?.length &&
-                map.terrain.getPassableSpeed(unit.tile, unit.rules.speedType, unit.isInfantry(), unitOnBridge)
+                map.terrain.getPassableSpeed(unit.tile, unit.rules.speedType, unit.isInfantry(), unit.onBridge)
                 ? this.game.map.terrain.getIslandIdMap(unit.rules.speedType, unit.isInfantry())
                 : undefined;
-            const unitIslandId = islandMap?.get(unit.tile, unitOnBridge);
+            const unitIslandId = islandMap?.get(unit.tile, unit.onBridge);
             const moveHelper = new MovePositionHelper(map);
             const finder = new RadialTileFinder(map.tiles, map.mapBounds, preferredTile, { width: 1, height: 1 }, 0, 5, (tile) => {
-                const bridge = !forceGroundLayer &&
-                    (!preferredBridge || preferredBridge.isHighBridge())
+                const bridge = !preferredBridge || preferredBridge.isHighBridge()
                     ? map.tileOccupation.getBridgeOnTile(tile)
                     : undefined;
                 return (!this.unreachableTargets.find((target) => target.tile === tile && target.toBridge === !!bridge) &&

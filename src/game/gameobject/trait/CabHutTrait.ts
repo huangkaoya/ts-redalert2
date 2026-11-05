@@ -76,10 +76,11 @@ export class CabHutTrait {
             for (const piece of pieces) {
                 if ((piece.obj.isLowBridge() &&
                     context.map.getTileZone(piece.obj.tile, true) !== ZoneType.Water) ||
-                    !piece.obj.isDestroyed) {
-                    piece.obj.deathType = DeathType.Demolish;
-                    context.destroyObject(piece.obj, attacker, true);
+                    piece.obj.isDestroyed) {
+                    continue;
                 }
+                piece.obj.deathType = DeathType.Demolish;
+                context.destroyObject(piece.obj, attacker, true);
             }
         }
     }

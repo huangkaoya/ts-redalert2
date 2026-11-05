@@ -30,6 +30,10 @@ export class CrewedTrait {
             survivorDivisor = crewRules.sovietSurvivorDivisor;
             crewType = crewRules.sovietCrew;
         }
+        else if (side === SideType.ThirdSide) {
+            survivorDivisor = crewRules.thirdSurvivorDivisor;
+            crewType = crewRules.thirdCrew;
+        }
         else {
             return;
         }

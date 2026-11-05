@@ -17,7 +17,7 @@ export class ApplyDamageExecutor extends TriggerExecutor {
             const bridge = context.map.tileOccupation.getBridgeOnTile(tile);
             const elevation = bridge?.tileElevation ?? 0;
             const zone = context.map.getTileZone(tile);
-            warhead.detonate(context, this.damage, tile, elevation, Coords.tile3dToWorld(tile.rx + 0.5, tile.ry + 0.5, tile.z + elevation), zone, bridge ? CollisionType.OnBridge : CollisionType.None, context.createTarget(bridge, tile), undefined, false, undefined, undefined);
+            warhead.detonate(context, this.damage, tile, elevation, Coords.tile3dToWorld(tile.rx + 0.5, tile.ry + 0.5, tile.z + elevation), zone, bridge ? CollisionType.OnBridge : CollisionType.None, context.createTarget(bridge, tile), undefined);
         }
         else {
             console.warn(`No valid location found for waypoint ${waypoint}. ` +

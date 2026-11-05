@@ -23,20 +23,48 @@ export class PlaceBuildingAction extends Action {
         super(ActionType.PlaceBuilding);
         this.game = game;
     }
-    unserialize(data: Uint8Array): void {
+    static decodePayload(data: Uint8Array): {
+        buildingId: number;
+        tile: { rx: number; ry: number };
+    } {
         const stream = new DataStream(data);
-        this.buildingRules = this.game.rules.getTechnoByInternalId(stream.readUint32(), ObjectType.Building);
+        return {
+            buildingId: stream.readUint32(),
+            tile: {
+                rx: stream.readUint16(),
+                ry: stream.readUint16(),
+            },
+        };
+    }
+    static encodePayload(payload: {
+        buildingId: number;
+        tile: { rx: number; ry: number };
+    }): Uint8Array {
+        const stream = new DataStream(8);
+        stream.writeUint32(payload.buildingId);
+        stream.writeUint16(payload.tile.rx);
+        stream.writeUint16(payload.tile.ry);
+        return stream.toUint8Array();
+    }
+    unserialize(data: Uint8Array): void {
+        const payload = PlaceBuildingAction.decodePayload(data);
+        this.buildingRules = this.game.rules.getTechnoByInternalId(
+            payload.buildingId,
+            ObjectType.Building,
+        );
         this.tile = {
-            x: stream.readUint16(),
-            y: stream.readUint16()
+            x: payload.tile.rx,
+            y: payload.tile.ry,
         };
     }
     serialize(): Uint8Array {
-        const stream = new DataStream(8);
-        stream.writeUint32(this.buildingRules.index);
-        stream.writeUint16(this.tile.x);
-        stream.writeUint16(this.tile.y);
-        return stream.toUint8Array();
+        return PlaceBuildingAction.encodePayload({
+            buildingId: this.buildingRules.index,
+            tile: {
+                rx: this.tile.x,
+                ry: this.tile.y,
+            },
+        });
     }
     print(): string {
         return `Place building ${this.buildingRules.name} at tile (${this.tile.x}, ${this.tile.y})`;

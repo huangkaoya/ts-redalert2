@@ -32,11 +32,9 @@ export class FreeUnitTrait {
             if (!spawnTile) {
                 building.owner.removeOwnedObject(unit);
                 unit.dispose();
-                building.owner.credits += unit.purchaseValue;
-                console.warn(`[FreeUnitTrait] failed to find spawn tile for "${unit.name}" from "${building.name}"#${building.id}; refunded ${unit.purchaseValue}`);
+                building.owner.credits += unit.rules.soylent || unit.purchaseValue;
                 return;
             }
-            console.log(`[FreeUnitTrait] spawning "${unit.name}" for "${building.name}"#${building.id} at (${spawnTile.rx}, ${spawnTile.ry}, ${spawnTile.z})`);
             context.spawnObject(unit, spawnTile);
         }
     }

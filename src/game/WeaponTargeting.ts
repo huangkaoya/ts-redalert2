@@ -64,6 +64,7 @@ interface WarheadRules {
     mindControl?: boolean;
     parasite?: boolean;
     temporal?: boolean;
+    ivanBomb?: boolean;
 }
 interface GeneralRules {
     prism: {
@@ -99,8 +100,8 @@ export class WeaponTargeting {
         else if (this.weaponRules.damage < 0) {
             this.targetChecks.push((target, context, alliances) => !!(target !== this.gameObject &&
                 target?.isUnit() &&
-                alliances?.areFriendly(target, this.gameObject) &&
-                target.healthTrait && target.healthTrait.health < 100 &&
+                alliances!.areFriendly(target, this.gameObject) &&
+                target.healthTrait.health < 100 &&
                 this.gameObject.isAircraft() === target.isAircraft()));
         }
         else {
@@ -111,17 +112,17 @@ export class WeaponTargeting {
             else {
                 this.targetChecks.push((target, context, alliances, forcefire) => !((!forcefire || this.warheadRules.mindControl) &&
                     target?.isTechno() &&
-                    alliances?.areFriendly(target, this.gameObject)));
+                    alliances!.areFriendly(target, this.gameObject)));
             }
             this.targetChecks.push((target, context, alliances) => !(target?.isTechno() &&
                 target.cloakableTrait?.isCloaked() &&
-                !alliances?.alliances.haveSharedIntel(this.gameObject.owner, target.owner)));
+                !alliances!.alliances.haveSharedIntel(this.gameObject.owner, target.owner)));
             if (this.weaponRules.limboLaunch) {
                 this.targetChecks.push((target, context, alliances, forcefire, shift) => !(shift && target &&
                     (target.isVehicle() || target.isAircraft()) &&
                     target.parasiteableTrait?.isInfested()));
             }
-            if (this.gameObject.rules.ivan) {
+            if (this.warheadRules.ivanBomb) {
                 this.targetChecks.push((target) => !(!target?.isTechno() || !target.tntChargeTrait || target.tntChargeTrait.hasCharge()));
             }
             if (this.warheadRules.parasite) {
@@ -133,7 +134,7 @@ export class WeaponTargeting {
                 this.targetChecks.push((target) => !(!target?.isTechno() || !target.mindControllableTrait));
             }
             if (!this.warheadRules.temporal) {
-                this.targetChecks.push((target, context, alliances, forcefire, shift) => !(shift && target?.isTechno() && target.warpedOutTrait?.isInvulnerable()));
+                this.targetChecks.push((target, context, alliances, forcefire, shift) => !(shift && target?.isTechno() && target.warpedOutTrait.isInvulnerable()));
             }
             if (this.gameObject.rules.natural) {
                 this.targetChecks.push((target) => !target?.isTechno() || !target.rules.unnatural);
@@ -149,7 +150,7 @@ export class WeaponTargeting {
         if (target?.isUnit()) {
             if (target?.isInfantry() &&
                 target.stance === StanceType.Paradrop &&
-                (target.tileElevation ?? 0) > 2) {
+                target.tileElevation > 2) {
                 return this.projectileRules.isAntiAir &&
                     (this.projectileRules.isAntiGround || this.weaponType === WeaponType.Secondary);
             }
@@ -161,10 +162,10 @@ export class WeaponTargeting {
                 !this.projectileRules.isAntiGround) {
                 return false;
             }
-            zone = target.zone ?? ZoneType.Ground;
+            zone = target.zone;
         }
         else {
-            zone = context?.landType === LandType.Water ? ZoneType.Water : ZoneType.Ground;
+            zone = context.landType === LandType.Water ? ZoneType.Water : ZoneType.Ground;
         }
         return zone === ZoneType.Water
             ? this.canTargetNaval(this.gameObject.rules.navalTargeting, this.gameObject, target, this.weaponType)

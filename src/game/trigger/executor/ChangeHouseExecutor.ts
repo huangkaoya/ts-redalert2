@@ -3,9 +3,9 @@ import { TriggerExecutor } from '@/game/trigger/TriggerExecutor';
 export class ChangeHouseExecutor extends TriggerExecutor {
     private static readonly locationHouseIdBegin: number = 4475;
     private readonly houseId: number;
-    constructor(params: string[], context: any) {
-        super(params, context);
-        this.houseId = Number(params[1]);
+    constructor(action: any, context: any) {
+        super(action, context);
+        this.houseId = Number(action.params[1]);
     }
     execute(game: any, objects: any[]): void {
         let targetPlayer;
@@ -16,6 +16,14 @@ export class ChangeHouseExecutor extends TriggerExecutor {
         }
         else {
             targetPlayer = game.getAllPlayers().find((player: any) => player.country?.id === this.houseId);
+        }
+        // 完善模拟层逻辑：defeated target → first ally of the TARGET house when
+        // redistribution is enabled; otherwise skip the transfer entirely.
+        // (ChangeHouseAllExecutor uses getAllies(source); this executor uses target.)
+        if (targetPlayer?.defeated) {
+            targetPlayer = game.isAssetRedistributionEnabled()
+                ? game.alliances.getAllies(targetPlayer)[0]
+                : undefined;
         }
         if (targetPlayer) {
             for (const obj of objects) {

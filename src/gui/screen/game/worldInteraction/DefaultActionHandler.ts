@@ -6,7 +6,7 @@ import { MoveOrder } from '@/game/order/MoveOrder';
 import { orderPriorities } from '@/game/order/orderPriorities';
 import { OrderFactory } from '@/game/order/OrderFactory';
 import { AttackOrder } from '@/game/order/AttackOrder';
-import { Target, TargetBridgeMode } from '@/game/Target';
+import { Target } from '@/game/Target';
 import { AttackMoveOrder } from '@/game/order/AttackMoveOrder';
 import { OrderFeedbackType } from '@/game/order/OrderFeedbackType';
 import { GuardAreaOrder } from '@/game/order/GuardAreaOrder';
@@ -136,23 +136,18 @@ export class DefaultActionHandler {
             action instanceof AttackMoveOrder ||
             action instanceof GuardAreaOrder) {
             const hoverObjectIsBridge = hover?.gameObject?.isOverlay?.() && hover.gameObject.isBridge?.();
-            const bridgeTile = hoverObjectIsBridge ? hover?.bridgeTile ?? hover.tile : hover?.bridgeTile;
-            if (!bridgeTile) {
-                return this.createOrderTarget(hover);
+            // 完善模拟层逻辑：OrderUnits: createTarget(bridgeOverlay, tile) when targeting a bridge.
+            if (hoverObjectIsBridge) {
+                const bridgeTile = hover?.bridgeTile ?? hover.tile;
+                return new Target(hover.gameObject, bridgeTile, this.map.tileOccupation);
             }
-            if (Target.usesGroundLayerUnderBridge(sourceObject)) {
-                // Ships/naval units travel the water layer. The water beneath a
-                // high bridge shares the deck tile's (rx,ry); hover.groundTile is
-                // the z=0 screen projection of the elevated deck and lands a couple
-                // tiles away on the (impassable) shore, so the move is rejected.
-                // Target the bridge tile itself in Ground mode so the unit heads to
-                // the water directly under the deck.
-                const groundTile = bridgeTile ?? hover?.groundTile ?? hover?.tile;
-                return groundTile
-                    ? new Target(undefined, groundTile, this.map.tileOccupation, TargetBridgeMode.Ground)
-                    : this.createOrderTarget(hover);
+            if (hover?.bridgeTile) {
+                const bridge = this.map.tileOccupation.getBridgeOnTile(hover.bridgeTile);
+                if (bridge) {
+                    return new Target(bridge, hover.bridgeTile, this.map.tileOccupation);
+                }
             }
-            return new Target(undefined, bridgeTile, this.map.tileOccupation, TargetBridgeMode.Bridge);
+            return this.createOrderTarget(hover);
         }
         return this.createOrderTarget(hover);
     }
@@ -312,7 +307,7 @@ export class DefaultActionHandler {
                 (this.mostSignificantAction instanceof AttackMoveOrder && !target.obj?.isTechno?.()) ||
                 this.mostSignificantAction instanceof GuardAreaOrder) {
                 this.renderableManager.createTransientAnim(this.audioVisualRules.moveFlash, (renderable: any) => {
-                    const bridge = target.getBridgeFor?.(this.mostSignificantAction.sourceObject) ?? target.getBridge?.();
+                    const bridge = target.getBridge?.();
                     renderable.setPosition(Coords.tile3dToWorld(target.tile.rx + 0.5, target.tile.ry + 0.5, target.tile.z + (bridge?.tileElevation ?? 0)));
                 });
             }

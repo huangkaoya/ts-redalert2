@@ -17,7 +17,6 @@ import { HealthTrait } from "@/game/gameobject/trait/HealthTrait";
 import { BridgeTrait } from "@/game/gameobject/trait/BridgeTrait";
 import { BridgeOverlayTypes, OverlayBridgeType } from "@/game/map/BridgeOverlayTypes";
 import { OreOverlayTypes } from "@/game/map/OreOverlayTypes";
-import { OverlayTibType } from "@/engine/type/OverlayTibType";
 import { TiberiumTrait } from "@/game/gameobject/trait/TiberiumTrait";
 import { TiberiumTreeTrait } from "@/game/gameobject/trait/TiberiumTreeTrait";
 import { AutoRepairTrait } from "@/game/gameobject/trait/AutoRepairTrait";
@@ -168,7 +167,7 @@ export class ObjectFactory {
             gameObject.traits.add(gameObject.warpedOutTrait);
             gameObject.temporalTrait = new TemporalTrait(gameObject);
             gameObject.traits.add(gameObject.temporalTrait);
-            if (gameObject.rules.bombable) {
+            if (gameObject.rules.bombable && !gameObject.art.toOverlay) {
                 gameObject.tntChargeTrait = new TntChargeTrait();
                 gameObject.traits.add(gameObject.tntChargeTrait);
             }
@@ -199,15 +198,8 @@ export class ObjectFactory {
             if (isBridgeOverlay) {
                 strength = rulesIni.combatDamage.bridgeStrength;
             }
-            const hitPointsRaw = strength;
-            let hitPoints = typeof hitPointsRaw === "number" && Number.isFinite(hitPointsRaw)
-                ? Math.floor(hitPointsRaw)
-                : 0;
-            if (hitPoints <= 0) {
-                hitPoints = 1;
-            }
-            if (hitPoints || gameObject.isTechno()) {
-                gameObject.healthTrait = new HealthTrait(hitPoints, gameObject, rulesIni.audioVisual.conditionYellow, rulesIni.audioVisual.conditionRed);
+            if (strength || gameObject.isTechno()) {
+                gameObject.healthTrait = new HealthTrait(strength, gameObject, rulesIni.audioVisual.conditionYellow, rulesIni.audioVisual.conditionRed);
                 gameObject.traits.add(gameObject.healthTrait);
             }
             if (gameObject.isOverlay() && isBridgeOverlay) {
@@ -218,9 +210,11 @@ export class ObjectFactory {
                 }
             }
         }
-        if (gameObject.isOverlay() &&
-            OreOverlayTypes.getOverlayTibType(rulesIni.getOverlayId(gameObject.name)) !== OverlayTibType.NotSpecial) {
-            gameObject.traits.add(new TiberiumTrait(gameObject));
+        if (gameObject.isOverlay()) {
+            const tibType = OreOverlayTypes.getOverlayTibType(rulesIni.getOverlayId(gameObject.name));
+            if (tibType !== undefined) {
+                gameObject.traits.add(new TiberiumTrait(gameObject, rulesIni.getTiberium(tibType)));
+            }
         }
         if (gameObject.isTerrain() && gameObject.rules.spawnsTiberium) {
             gameObject.traits.add(new TiberiumTreeTrait(gameObject.rules));

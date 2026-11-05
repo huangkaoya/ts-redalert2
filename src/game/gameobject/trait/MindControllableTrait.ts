@@ -27,7 +27,12 @@ export class MindControllableTrait {
     }
     restore(world: World): void {
         if (this.prevOwner) {
-            world.changeObjectOwner(this.gameObject, this.prevOwner);
+            // 完善模拟层逻辑：defeated original owner restores to civilian instead.
+            let owner = this.prevOwner;
+            if (this.prevOwner.defeated) {
+                owner = world.getCivilianPlayer();
+            }
+            world.changeObjectOwner(this.gameObject, owner);
             this.prevOwner = undefined;
             this.controller = undefined;
         }

@@ -141,11 +141,11 @@ export class MapShroud {
         }
     }
     isShrouded(tile: Tile, offset: number = 0): boolean {
-        const coords = this.rxyzToSxy(tile.rx, tile.ry, tile.z + offset);
-        return this.getShroudTypeByShroudCoords(coords) === ShroudType.Unexplored;
+        return this.getShroudType(tile, offset) === ShroudType.Unexplored;
     }
-    getShroudType(tile: Tile): ShroudType {
-        return this.tiles[this.getTileIndex(tile)] & MapShroud.SHROUD_TYPE_MASK;
+    getShroudType(tile: Tile, offset: number = 0): ShroudType {
+        const coords = this.rxyzToSxy(tile.rx, tile.ry, tile.z + offset);
+        return this.getShroudTypeByShroudCoords(coords);
     }
     isFlagged(tile: Tile, flag: number): boolean {
         return (this.tiles[this.getTileIndex(tile)] & flag) !== 0;
@@ -288,9 +288,11 @@ export class MapShroud {
                 if (!matchesOldValue || !inRadius || !belowElevationLimit) {
                     continue;
                 }
-                const nextType = newValue ?? currentType;
-                this.tiles[index] = nextType | newFlags;
-                if (currentType !== nextType || currentFlags !== newFlags) {
+                // 完善模拟层逻辑：assign (newValue ?? currentType)|flags, then push unless
+                // currentType === newValue (raw, not coalesced) AND flags unchanged.
+                // When newValue is undefined (e.g. toggleFlagsAround), 模拟层 always pushes.
+                this.tiles[index] = (newValue ?? currentType) | newFlags;
+                if (!(currentType === newValue && currentFlags === newFlags)) {
                     changedCoords.push({ sx: x, sy: y });
                 }
             }

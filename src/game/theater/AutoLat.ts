@@ -33,7 +33,7 @@ export class AutoLat {
                 }
             }
             else if (setNum === tileData.getGeneralValue("RampBase") &&
-                tile.rampType >= 1 && tile.rampType <= 4) {
+                !(tile.rampType < 1 || tile.terrainType > 4)) {
                 let smoothFlags = -1;
                 const topRight = tiles.getNeighbourTile(tile, TileDirection.TopRight);
                 const bottomRight = tiles.getNeighbourTile(tile, TileDirection.BottomRight);

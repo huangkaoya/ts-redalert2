@@ -37,6 +37,8 @@ export interface GameOpts {
     hostTeams?: boolean;
     destroyableBridges: boolean;
     multiEngineer: boolean;
+    instantCapture?: boolean;
+    delayedOils?: boolean;
     noDogEngiKills: boolean;
     mapName: string;
     mapTitle: string;

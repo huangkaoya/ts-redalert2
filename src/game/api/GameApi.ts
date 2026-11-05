@@ -53,18 +53,25 @@ export class GameApi {
             throw new Error(`Player "${playerName2}" doesn't exist`);
         return this.game.alliances.areAllied(player1, player2);
     }
-    canPlaceBuilding(playerName: string, arg2: any, arg3: any): boolean {
+    canPlaceBuilding(
+        playerName: string,
+        buildingType: string,
+        position: any,
+        options?: { ignoreAdjacent?: boolean; normalizedTile?: boolean; [key: string]: unknown },
+    ): boolean {
         const player = this.game.getPlayerByName(playerName);
         if (!player)
             throw new Error(`Player "${playerName}" doesn't exist`);
-        // Backward/forward compatible with both signatures:
-        // canPlaceBuilding(playerName, position, buildingType)
-        // canPlaceBuilding(playerName, buildingType, position)
-        const buildingType = typeof arg2 === 'string' ? arg2 : arg3;
-        const position = typeof arg2 === 'string' ? arg3 : arg2;
+        const placeOptions = options ?? {};
+        if (placeOptions.ignoreAdjacent === undefined) {
+            placeOptions.ignoreAdjacent = this.rulesApi.getBuilding(buildingType).constructionYard;
+        }
         return this.game
             .getConstructionWorker(player)
-            .canPlaceAt(buildingType, position, { normalizedTile: true });
+            .canPlaceAt(buildingType, position, {
+                normalizedTile: true,
+                ...placeOptions,
+            });
     }
     getBuildingPlacementData(buildingType: string): BuildingPlacementData {
         const buildingData = this.game.art.getObject(buildingType, ObjectType.Building);
@@ -262,7 +269,7 @@ export class GameApi {
             return this.game.generateRandomInt(min, max);
         }
         const random = this.generateRandom();
-        return Math.round(random * (max - min)) + min;
+        return Math.floor(random * (max - min + 1)) + min;
     }
     generateRandom(): number {
         return this.useGameRandom

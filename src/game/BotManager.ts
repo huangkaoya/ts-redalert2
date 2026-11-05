@@ -6,8 +6,8 @@ import { EventsApi } from './api/EventsApi';
 import { GameApi } from './api/GameApi';
 import { LoggerApi } from './api/LoggerApi';
 import { ProductionApi } from './api/ProductionApi';
-
-const logger = AppLogger.get('BotManager');
+import { PlayerApi } from './api/PlayerApi';
+import { BotContext } from './bot/BotContext';
 
 export class BotManager {
     private actionFactory: any;
@@ -18,10 +18,18 @@ export class BotManager {
     private bots: Map<any, any>;
     private disposables: CompositeDisposable;
     private gameApi?: GameApi;
+
     static factory(actionFactory: any, botFactory: any, botDebugIndex: any, actionLogger: any): BotManager {
         return new this(actionFactory, new ActionQueue(), botFactory, botDebugIndex, actionLogger);
     }
-    constructor(actionFactory: any, actionQueue: ActionQueue, botFactory: any, botDebugIndex: any, actionLogger: any) {
+
+    constructor(
+        actionFactory: any,
+        actionQueue: ActionQueue,
+        botFactory: any,
+        botDebugIndex: any,
+        actionLogger: any,
+    ) {
         this.actionFactory = actionFactory;
         this.actionQueue = actionQueue;
         this.botFactory = botFactory;
@@ -30,90 +38,67 @@ export class BotManager {
         this.bots = new Map();
         this.disposables = new CompositeDisposable();
     }
+
     init(game: any): void {
         this.gameApi = new GameApi(game, true);
         const eventsApi = new EventsApi(game.events);
-        const aiCombatants = game.getCombatants().filter((c: any) => c.isAi);
-        logger.info(`[BotManager] Initializing ${aiCombatants.length} AI player(s)`);
-        for (const combatant of aiCombatants) {
-            try {
-                const bot = this.botFactory.create(combatant);
-                this.bots.set(combatant, bot);
-                logger.info(`[BotManager] Created bot "${bot.name}" (${bot.constructor.name}) for country "${combatant.country?.name ?? '?'}"`);
-            } catch (e) {
-                logger.error(`[BotManager] Failed to create bot for "${combatant.name}":`, e);
-            }
+        for (const combatant of game.getCombatants().filter((c: any) => c.isAi)) {
+            this.bots.set(combatant, this.botFactory.create(combatant));
         }
         this.updateDebugBotIndex(this.botDebugIndex.value, game);
         const debugIndexHandler = (index: number) => this.updateDebugBotIndex(index, game);
         this.botDebugIndex.onChange.subscribe(debugIndexHandler);
         this.disposables.add(() => this.botDebugIndex.onChange.unsubscribe(debugIndexHandler));
-        eventsApi.subscribe((event: any) => {
-            this.bots.forEach(bot => {
-                try {
-                    bot.onGameEvent(event, this.gameApi);
-                } catch (e) {
-                    logger.error(`[BotManager] Bot "${bot.name}" onGameEvent error:`, e);
-                }
-            });
-        });
+        eventsApi.subscribe((event: any) =>
+            this.bots.forEach((bot) => bot.onGameEvent(event, this.gameApi)),
+        );
         this.disposables.add(eventsApi);
         for (const bot of this.bots.values()) {
-            try {
-                const player = game.getPlayerByName(bot.name);
-                if (!player) {
-                    logger.error(`[BotManager] Player "${bot.name}" not found in game`);
-                    continue;
-                }
-                if (!player.production) {
-                    logger.error(`[BotManager] Player "${bot.name}" has no production system`);
-                    continue;
-                }
-                bot.setGameApi(this.gameApi);
-                bot.setActionsApi(new ActionsApi(game, this.actionFactory, this.actionQueue, bot));
-                bot.setProductionApi(new ProductionApi(player.production));
-                bot.setLogger(new LoggerApi(AppLogger.get(bot.name) as any, this.gameApi));
-                logger.info(`[BotManager] APIs set for bot "${bot.name}", calling onGameStart...`);
-                bot.onGameStart(this.gameApi);
-                logger.info(`[BotManager] Bot "${bot.name}" onGameStart completed successfully`);
-            } catch (e) {
-                logger.error(`[BotManager] Bot "${bot.name}" initialization failed:`, e);
-            }
+            const playerApi = new PlayerApi(
+                bot.name,
+                this.gameApi!,
+                new ActionsApi(game, this.actionFactory, this.actionQueue, bot),
+                new ProductionApi(game.getPlayerByName(bot.name).production),
+            );
+            const loggerApi = new LoggerApi(AppLogger.get(bot.name) as any, this.gameApi);
+            bot.setGameApi(this.gameApi);
+            bot.setActionsApi(playerApi.actions);
+            bot.setProductionApi(playerApi.production);
+            bot.setLogger(loggerApi);
+            bot.setContext?.(new BotContext(this.gameApi, playerApi, loggerApi));
+            bot.onGameInit?.(this.gameApi);
         }
-        logger.info(`[BotManager] Initialization complete. ${this.bots.size} bot(s) active.`);
     }
+
+    onGameStart(): void {
+        if (!this.gameApi) {
+            throw new Error('Bot manager is not initialized');
+        }
+        for (const bot of this.bots.values()) {
+            bot.onGameStart(this.gameApi);
+        }
+    }
+
     update(gameState: any): void {
         for (const action of this.actionQueue.dequeueAll()) {
-            try {
-                (action as any).process();
-                const actionLog = (action as any).print();
-                if (actionLog) {
-                    this.actionLogger?.debug?.(`(${action.player.name})@${gameState.currentTick}: ${actionLog}`);
-                }
-            } catch (e) {
-                logger.error(`[BotManager] Action process error @tick ${gameState.currentTick}:`, e);
+            (action as any).process();
+            const actionLog = action.print();
+            if (actionLog) {
+                this.actionLogger.debug(`(${action.player.name})@${gameState.currentTick}: ${actionLog}`);
             }
         }
         for (const combatant of gameState.getCombatants().filter((c: any) => c.isAi)) {
-            const bot = this.bots.get(combatant);
-            if (!bot) {
-                continue;
-            }
-            try {
-                bot.onGameTick(this.gameApi);
-            } catch (e) {
-                if (gameState.currentTick % 150 === 0) {
-                    logger.error(`[BotManager] Bot "${bot.name}" onGameTick error @tick ${gameState.currentTick}:`, e);
-                }
-            }
+            this.bots.get(combatant).onGameTick(this.gameApi);
         }
     }
+
     private updateDebugBotIndex(index: number, game: any): void {
         const debugBotName = index > 0 ? game.getAiPlayerName(index) : undefined;
         for (const bot of this.bots.values()) {
             bot.setDebugMode(bot.name === debugBotName);
         }
     }
+
     dispose(): void {
         this.gameApi = undefined;
         this.bots.clear();

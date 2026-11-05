@@ -79,6 +79,7 @@ export class ObjectArt {
     public addOccupy: Vector2[] = [];
     public removeOccupy: Vector2[] = [];
     public rotates: boolean = false;
+    public toOverlay?: string;
     static getDefaultPalette(objectType: ObjectType): PaletteType {
         switch (objectType) {
             case ObjectType.Building:
@@ -204,11 +205,11 @@ export class ObjectArt {
     private init(): void {
         this.image = [ObjectType.Infantry, ObjectType.Vehicle, ObjectType.Aircraft].includes(this.type)
             ? ""
-            : this.art.getString("Image") || "";
-        this.report = this.art.getString("Report");
+            : this.art.getString("Image");
+        this.report = this.art.getString("Report") || undefined;
         this.readRotors();
         this.noHva = this.art.getBool("NoHVA", false);
-        this.startSound = this.art.getString("StartSound");
+        this.startSound = this.art.getString("StartSound") || undefined;
         this.readMuzzleFlash();
         this.readPaletteAndLightingTypes();
         this.readRemapability();
@@ -246,6 +247,7 @@ export class ObjectArt {
         this.addOccupy = this.readAddRemoveOccupy("AddOccupy");
         this.removeOccupy = this.readAddRemoveOccupy("RemoveOccupy");
         this.rotates = this.art.getBool("Rotates", false);
+        this.toOverlay = this.art.getString("ToOverlay") || undefined;
     }
     get imageName(): string {
         return (this.image || this.rules.imageName) + (this.rules.alternateArcticArt ? "A" : "");
@@ -334,14 +336,16 @@ export class ObjectArt {
     private readFlatness(): void {
         let flat = false;
         if (this.type === ObjectType.Building || this.type === ObjectType.Animation) {
-            flat = this.art.getBool("Flat", false);
+            flat = this.art.getBool("Flat");
         }
         else if (this.type === ObjectType.Smudge) {
             flat = true;
         }
+        // 完善模拟层逻辑：OverlayRules sets flat=true unless wall/crate/isARock
+        // (wall || crate || isARock || (flat = true)).
         if (this.rules instanceof OverlayRules) {
             const overlayRules = this.rules as any;
-            if (overlayRules.wall || overlayRules.crate || overlayRules.isARock) {
+            if (!(overlayRules.wall || overlayRules.crate || overlayRules.isARock)) {
                 flat = true;
             }
         }

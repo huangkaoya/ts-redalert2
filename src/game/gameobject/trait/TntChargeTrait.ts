@@ -7,6 +7,7 @@ import { NotifyDestroy } from './interface/NotifyDestroy';
 import { NotifyTick } from './interface/NotifyTick';
 import { GameObject } from '@/game/gameobject/GameObject';
 import { World } from '@/game/World';
+import { SpecialWarheadType } from '@/game/SpecialWarheadType';
 export class TntChargeTrait {
     private timer: Timer;
     private attackerInfo?: any;
@@ -45,8 +46,7 @@ export class TntChargeTrait {
     [NotifyDestroy.onDestroy](gameObject: GameObject, world: World, context?: any): void {
         if (this.timer.isActive() &&
             !context?.weapon?.warhead.rules.ivanBomb &&
-            gameObject.deathType !== DeathType.None &&
-            gameObject.deathType !== DeathType.Temporal) {
+            ![DeathType.None, DeathType.Temporal, DeathType.Sink].includes(gameObject.deathType)) {
             this.timer.reset();
             this.detonateIvanWarhead(world, gameObject);
         }
@@ -60,6 +60,6 @@ export class TntChargeTrait {
         const onBridge = !!target.isUnit() && target.onBridge;
         warhead.detonate(world as any, damage, tile, elevation, target.isBuilding()
             ? Coords.tile3dToWorld(tile.rx + 0.5, tile.ry + 0.5, tile.z + elevation)
-            : target.position.worldPosition, zone, onBridge ? CollisionType.OnBridge : CollisionType.None, world.createTarget(target, tile), { ...this.attackerInfo, weapon: undefined }, false, false as any, undefined);
+            : target.position.worldPosition, zone, onBridge ? CollisionType.OnBridge : CollisionType.None, world.createTarget(target, tile), { ...this.attackerInfo, weapon: undefined }, SpecialWarheadType.TntCharge);
     }
 }

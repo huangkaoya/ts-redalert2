@@ -2,11 +2,12 @@ import { EventType } from "@/game/event/EventType";
 import { TriggerCondition } from "@/game/trigger/TriggerCondition";
 export class SpyEnteringAsInfantryCondition extends TriggerCondition {
     private infantryIdx: number;
-    constructor(params: any[], targets: any[]) {
-        super(params, targets);
-        this.infantryIdx = Number(params[1]);
+    constructor(event: any, targets: any[]) {
+        super(event, targets);
+        this.infantryIdx = Number(event.params[1]);
     }
-    check(events: any[], targets: any[]): any[] {
+    // 完善模拟层逻辑：check(context, events) — filter the events list (2nd arg).
+    check(_context: any, events: any[]): any[] {
         return events
             .filter((event) => {
             if (event.type !== EventType.BuildingInfiltration)

@@ -3,7 +3,8 @@ const sideMap = new Map<string, SideType>()
     .set("GDI", SideType.GDI)
     .set("Nod", SideType.Nod)
     .set("Civilian", SideType.Civilian)
-    .set("Mutant", SideType.Mutant);
+    .set("Mutant", SideType.Mutant)
+    .set("ThirdSide", SideType.ThirdSide);
 const tooltipMap = new Map<string, string>([
     ["Americans", "STT:PlayerSideAmerica"],
     ["Alliance", "STT:PlayerSideKorea"],
@@ -14,6 +15,7 @@ const tooltipMap = new Map<string, string>([
     ["Arabs", "STT:PlayerSideIraq"],
     ["Confederation", "STT:PlayerSideCuba"],
     ["Russians", "STT:PlayerSideRussia"],
+    ["YuriCountry", "STT:PlayerSideYuriCountry"],
 ]);
 export class CountryRules {
     private id: string;

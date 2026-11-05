@@ -9,6 +9,7 @@ import { WeaponTargeting } from "@/game/WeaponTargeting";
 import { WeaponType } from "@/game/WeaponType";
 import { Vector2 } from "@/game/math/Vector2";
 import { Vector3 } from "@/game/math/Vector3";
+import { ShroudType } from "@/game/map/MapShroud";
 interface GameMap {
     isWithinHardBounds(position: any): boolean;
 }
@@ -33,7 +34,7 @@ interface GameEngine {
     generateRandomInt(min: number, max: number): number;
     mapShroudTrait: {
         getPlayerShroud(owner: any): {
-            isShrouded(tile: any, elevation: number): boolean;
+            getShroudType(tile: any, elevation: number): number;
             revealTemporarily(obj: GameObject): void;
         } | null;
     };
@@ -193,7 +194,7 @@ export class Weapon {
             }
             const spawnedUnitRules: any = rulesEngine.getObject((gameObject as any).rules.spawns, ObjectType.Aircraft);
             if (!spawnedUnitRules.primary) {
-                throw new Error(`Spawned unit doesn't have a primary weapon`);
+                throw new Error(`Spawned unit "${spawnedUnitRules.name}" doesn't have a primary weapon`);
             }
             warheadName = rulesEngine.getWeapon(spawnedUnitRules.primary).warhead;
         }
@@ -324,7 +325,7 @@ export class Weapon {
             }
             else {
                 this.cooldownTicks =
-                    this.useBurstDelay && gameObject.rules.burstDelay?.[this.burstIndex] !== undefined
+                    this.useBurstDelay && gameObject.rules.burstDelay[this.burstIndex] !== undefined
                         ? gameObject.rules.burstDelay[this.burstIndex]
                         : engine.generateRandomInt(3, 5);
             }
@@ -396,8 +397,11 @@ export class Weapon {
         }
         if (this.rules.revealOnFire && target.obj?.isTechno()) {
             const playerShroud = engine.mapShroudTrait.getPlayerShroud(target.obj.owner);
-            if (playerShroud?.isShrouded(gameObject.tile, gameObject.tileElevation)) {
-                playerShroud.revealTemporarily(gameObject);
+            if (playerShroud) {
+                const shroudType = playerShroud.getShroudType(gameObject.tile, gameObject.tileElevation);
+                if (shroudType === ShroudType.Unexplored || shroudType === ShroudType.TemporaryReveal) {
+                    playerShroud.revealTemporarily(gameObject);
+                }
             }
         }
         if (this.rules.decloakToFire) {

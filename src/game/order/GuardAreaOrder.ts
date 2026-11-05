@@ -6,6 +6,7 @@ import { MoveTask } from "@/game/gameobject/task/move/MoveTask";
 import { OrderFeedbackType } from "./OrderFeedbackType";
 import { MoveTrait, MoveResult } from "@/game/gameobject/trait/MoveTrait";
 import { GatherOreTask } from "@/game/gameobject/task/harvester/GatherOreTask";
+import { ReturnOreTask } from "@/game/gameobject/task/harvester/ReturnOreTask";
 export class GuardAreaOrder extends Order {
     private game: any;
     private targeted: boolean;
@@ -36,19 +37,22 @@ export class GuardAreaOrder extends Order {
     isAllowed(): boolean {
         return true;
     }
-    process(): (MoveTask | CallbackTask | GatherOreTask)[] {
+    process(): (MoveTask | CallbackTask | GatherOreTask | ReturnOreTask)[] {
         const targetTile = this.targeted ? this.target.tile : undefined;
         const sourceObject = this.sourceObject;
-        const tasks: (MoveTask | CallbackTask | GatherOreTask)[] = [];
+        const tasks: (MoveTask | CallbackTask | GatherOreTask | ReturnOreTask)[] = [];
         if (targetTile) {
-            tasks.push(new MoveTask(this.game, targetTile, !!this.target.getBridgeFor(this.sourceObject), {
+            tasks.push(new MoveTask(this.game, targetTile, !!this.target.getBridge(), {
                 closeEnoughTiles: this.game.rules.general.closeEnough,
             }));
         }
         if (sourceObject.isVehicle() && sourceObject.harvesterTrait) {
+            // 完善模拟层逻辑：full harvester returns ore; otherwise gather (explicit guard order).
             tasks.push(new CallbackTask(() => {
                 sourceObject.harvesterTrait.lastOreSite = undefined;
-            }), new GatherOreTask(this.game, undefined, true));
+            }), sourceObject.harvesterTrait.isFull()
+                ? new ReturnOreTask(this.game, undefined, false, true)
+                : new GatherOreTask(this.game, undefined, true));
         }
         else {
             tasks.push(new CallbackTask(() => {

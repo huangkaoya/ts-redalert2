@@ -150,10 +150,9 @@ export class TileCollection {
             for (const [offsetX, offsetY] of offsets) {
                 const neighborTile = this.getByMapCoords(cliffTile.rx + offsetX, cliffTile.ry + offsetY);
                 if (neighborTile &&
-                    neighborTile.z < cliffTile.z &&
+                    cliffTile.z - neighborTile.z >= 4 &&
                     neighborTile.terrainType !== TerrainType.Cliff &&
-                    neighborTile.terrainType !== TerrainType.Rough &&
-                    neighborTile.rampType === 0) {
+                    neighborTile.terrainType !== TerrainType.Rough) {
                     neighborTile.landType = LandType.Rock;
                 }
             }

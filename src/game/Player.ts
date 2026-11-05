@@ -32,6 +32,7 @@ export class Player {
     private unitsLostByType: Map<ObjectType, number> = new Map();
     public buildingsCaptured: number = 0;
     public cratesPickedUp: number = 0;
+    public creditsGained: number = 0;
     public cheerCooldownTicks: number = 0;
     public readonly isObserver: boolean;
     public readonly isNeutral: boolean;

@@ -107,7 +107,7 @@ export class ArmedTrait implements NotifyTick, NotifyDestroy {
     private selectSpecialWeapon(index: number, isElite: boolean = false): void {
         const gameObject = this.gameObject;
         const weaponCount = gameObject.rules.weaponCount;
-        if (!weaponCount || weaponCount < 1) {
+        if (weaponCount < 1) {
             throw new Error(`Object "${gameObject.name}" doesn't support special weapons`);
         }
         if (weaponCount - 1 < index) {
@@ -160,8 +160,8 @@ export class ArmedTrait implements NotifyTick, NotifyDestroy {
         return [this.primaryWeapon, this.secondaryWeapon].filter(isNotNullOrUndefined);
     }
     [NotifyTick.onTick](): void {
-        this.primaryWeapon?.tick();
-        this.secondaryWeapon?.tick();
+        this.primaryWeapon && this.primaryWeapon.tick();
+        this.secondaryWeapon && this.secondaryWeapon.tick();
     }
     [NotifyDestroy.onDestroy](gameObject: GameObject, target: Target, context?: DestroyContext): void {
         if (!this.deathWeapon)

@@ -10,8 +10,17 @@ import { DeployNotAllowedEvent } from "@/game/event/DeployNotAllowedEvent";
 import { isNotNullOrUndefined } from "@/util/typeGuard";
 import { ScatterPositionHelper } from "@/game/gameobject/unit/ScatterPositionHelper";
 import { ActionType } from "@/game/action/ActionType";
-import { TargetBridgeMode } from "@/game/Target";
 export const ORDER_UNIT_LIMIT = 128;
+
+export type OrderUnitsPayload = {
+    orderType: number;
+    queue?: boolean;
+    target?: {
+        tile: { rx: number; ry: number };
+        objectId?: number;
+    };
+};
+
 export class OrderUnitsAction extends Action {
     private game: any;
     private map: any;
@@ -30,63 +39,49 @@ export class OrderUnitsAction extends Action {
         this.queue = false;
         this.isInvalid = false;
     }
-    unserialize(data: Uint8Array): void {
-        let stream = new DataStream(data);
-        this.orderType = stream.readUint8();
+    static decodePayload(data: Uint8Array): OrderUnitsPayload {
+        const stream = new DataStream(data);
+        const orderType = stream.readUint8();
         const version = stream.readUint8();
-        if (version !== 0) {
-            const rx = stream.readUint16();
-            const ry = stream.readUint16();
-            this.queue = version > 2 && Boolean(stream.readUint8());
-            let targetObject: any;
-            let bridgeMode = TargetBridgeMode.Auto;
-            if (version > 3) {
-                const objectId = stream.readUint32();
-                if (objectId === 0 && version > 4) {
-                    targetObject = undefined;
-                }
-                else if (!this.game.getWorld().hasObjectId(objectId)) {
-                    this.isInvalid = true;
-                    return;
-                }
-                else {
-                    targetObject = this.game.getObjectById(objectId);
-                }
-            }
-            if (version > 4) {
-                bridgeMode = stream.readUint8();
-            }
-            const tile = this.map.tiles.getByMapCoords(rx, ry);
-            if (tile) {
-                this.target = this.game.createTarget(targetObject, tile, bridgeMode);
-            }
-            else {
-                this.isInvalid = true;
-            }
+        if (version === 0) {
+            return { orderType };
         }
+        const rx = stream.readUint16();
+        const ry = stream.readUint16();
+        let queue: boolean | undefined;
+        if (version > 2) {
+            queue = Boolean(stream.readUint8());
+        }
+        let objectId: number | undefined;
+        if (version > 3) {
+            objectId = stream.readUint32();
+        }
+        return {
+            orderType,
+            queue,
+            target: {
+                tile: { rx, ry },
+                objectId,
+            },
+        };
     }
-    serialize(): Uint8Array {
-        let stream = new DataStream(12);
+    static encodePayload(payload: OrderUnitsPayload): Uint8Array {
+        const stream = new DataStream(11);
         stream.dynamicSize = false;
-        stream.writeUint8(this.orderType);
+        stream.writeUint8(payload.orderType);
         let extraDataSize = 0;
         stream.writeUint8(extraDataSize);
-        if (this.target) {
-            stream.writeUint16(this.target.tile.rx);
-            stream.writeUint16(this.target.tile.ry);
+        const target = payload.target;
+        if (target) {
+            stream.writeUint16(target.tile.rx);
+            stream.writeUint16(target.tile.ry);
             extraDataSize += 2;
-            const objectId = (this.target.obj || this.target.getBridge())?.id;
-            const hasExplicitBridgeMode = this.target.hasExplicitBridgeMode?.();
-            if (this.queue || objectId !== undefined || hasExplicitBridgeMode) {
-                stream.writeUint8(Number(this.queue));
+            if (payload.queue || target.objectId !== undefined) {
+                stream.writeUint8(Number(payload.queue));
                 extraDataSize += 1;
             }
-            if (objectId !== undefined || hasExplicitBridgeMode) {
-                stream.writeUint32(objectId ?? 0);
-                extraDataSize += 1;
-            }
-            if (hasExplicitBridgeMode) {
-                stream.writeUint8(this.target.getBridgeMode());
+            if (target.objectId !== undefined) {
+                stream.writeUint32(target.objectId);
                 extraDataSize += 1;
             }
         }
@@ -96,6 +91,48 @@ export class OrderUnitsAction extends Action {
             stream.writeUint8(extraDataSize);
         }
         return new Uint8Array(stream.buffer, stream.byteOffset, currentPosition);
+    }
+    unserialize(data: Uint8Array): void {
+        const payload = OrderUnitsAction.decodePayload(data);
+        this.orderType = payload.orderType;
+        if (payload.queue !== undefined) {
+            this.queue = payload.queue;
+        }
+        if (payload.target) {
+            let targetObject: any;
+            if (payload.target.objectId !== undefined) {
+                if (!this.game.getWorld().hasObjectId(payload.target.objectId)) {
+                    this.isInvalid = true;
+                    return;
+                }
+                targetObject = this.game.getObjectById(payload.target.objectId);
+            }
+            const tile = this.map.tiles.getByMapCoords(
+                payload.target.tile.rx,
+                payload.target.tile.ry,
+            );
+            if (tile) {
+                this.target = this.game.createTarget(targetObject, tile);
+            }
+            else {
+                this.isInvalid = true;
+            }
+        }
+    }
+    serialize(): Uint8Array {
+        return OrderUnitsAction.encodePayload({
+            orderType: this.orderType,
+            queue: this.queue,
+            target: this.target
+                ? {
+                    tile: {
+                        rx: this.target.tile.rx,
+                        ry: this.target.tile.ry,
+                    },
+                    objectId: (this.target.obj || this.target.getBridge())?.id,
+                }
+                : undefined,
+        });
     }
     print(): string {
         if (this.isInvalid) {
@@ -157,42 +194,17 @@ export class OrderUnitsAction extends Action {
                 moveOrders.forEach((order: any) => processedOrders.push(order));
             }
             else {
+                const targetBridge = this.target.getBridge();
                 const forceMove = moveOrders[0].forceMove;
-                const movePositionHelper = new MovePositionHelper(this.map);
-                const groups = new Map<any, any[]>();
-                for (const order of moveOrders) {
-                    const bridge = order.target.getBridgeFor(order.sourceObject);
-                    const group = groups.get(bridge) ?? [];
-                    group.push(order);
-                    groups.set(bridge, group);
-                }
-                groups.forEach((orders, bridge) => {
-                    const units = orders.map((order: any) => order.sourceObject);
-                    const positions = movePositionHelper.findPositions(units, this.target.tile, bridge, forceMove);
-                    orders.forEach((order: any) => {
-                        const position = positions.get(order.sourceObject);
-                        if (!position) {
-                            return;
-                        }
-                        const bridgeOnTile = bridge
-                            ? (bridge.isHighBridge()
-                                ? this.map.tileOccupation.getBridgeOnTile(position)
-                                : bridge)
-                            : undefined;
-                        // A move target is a LOCATION, not the bridge structure: leave
-                        // obj undefined and let TargetBridgeMode.Bridge re-attach the
-                        // bridge via the tile. Passing the bridge as obj makes
-                        // MoveOrder.isValid() treat it as an (unmovable) overlay object
-                        // and silently drop the order, so ground units never move onto
-                        // the bridge.
-                        const target = this.game.createTarget(
-                            undefined,
-                            position,
-                            bridgeOnTile ? TargetBridgeMode.Bridge : TargetBridgeMode.Ground,
-                        );
-                        order.target = target;
-                        processedOrders.push(order);
-                    });
+                const units = moveOrders.map((order: any) => order.sourceObject);
+                const positions = new MovePositionHelper(this.map).findPositions(units, this.target.tile, targetBridge, forceMove);
+                moveOrders.forEach((order: any) => {
+                    const position = positions.get(order.sourceObject);
+                    const bridgeOnTile = !targetBridge || targetBridge.isHighBridge()
+                        ? this.map.tileOccupation.getBridgeOnTile(position)
+                        : targetBridge;
+                    order.target = this.game.createTarget(bridgeOnTile, position);
+                    processedOrders.push(order);
                 });
             }
         }
@@ -204,14 +216,7 @@ export class OrderUnitsAction extends Action {
             scatterOrders.forEach((order: any) => {
                 const position = scatterPositions.get(order.sourceObject);
                 if (position) {
-                    // Same as the move case: a scatter destination is a location, not
-                    // the bridge object — keep obj undefined so the order isn't dropped.
-                    const target = this.game.createTarget(
-                        undefined,
-                        position.tile,
-                        position.onBridge ? TargetBridgeMode.Bridge : TargetBridgeMode.Ground,
-                    );
-                    order.target = target;
+                    order.target = this.game.createTarget(position.onBridge, position.tile);
                     processedOrders.push(order);
                 }
             });

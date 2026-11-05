@@ -55,8 +55,9 @@ export class SuperWeaponsTrait {
     }
     [NotifyPower.onPowerChange](e: any, t: any) { }
     [NotifyWarpChange.onChange](e: any, t: any) {
-        const i = e.superWeaponTrait?.getSuperWeapon(e);
-        if (e.owner.powerTrait && e.isBuilding() && e.superWeaponTrait && i) {
+        let i: any;
+        if (e.owner.powerTrait && e.isBuilding() && e.superWeaponTrait &&
+            (i = e.superWeaponTrait.getSuperWeapon(e))) {
             this.updateTimer(i, !e.owner.powerTrait.isLowPower());
         }
     }

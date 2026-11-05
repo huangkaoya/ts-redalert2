@@ -47,7 +47,7 @@ export class MoveAsideTask extends Task {
         }
         if (targetTile) {
             this.resolved = true;
-            if (unit.isInfantry() && unit.deployerTrait?.isDeployed()) {
+            if (unit.isInfantry() && unit.deployerTrait && unit.deployerTrait.isDeployed()) {
                 unit.deployerTrait.setDeployed(false);
             }
             if (unit.moveTrait.isDisabled()) {
@@ -68,21 +68,21 @@ export class MoveAsideTask extends Task {
             return true;
         }
         targetBridge = map.tileOccupation.getBridgeOnTile(pushTile);
-        const pushableUnits = map.tileOccupation.getGroundObjectsOnTile(pushTile).filter(unit => unit.isUnit() &&
-            unit.owner === unit.owner &&
-            unit.tile === pushTile &&
-            unit.onBridge === !!targetBridge &&
-            !(unit.isInfantry() && unit.stance === StanceType.Paradrop) &&
-            !(unit.isAircraft() && unit.missileSpawnTrait));
-        if (pushableUnits.find(unit => unit.moveTrait.collisionState === CollisionState.Waiting ||
-            unit.unitOrderTrait.hasTasks())) {
+        const pushableUnits = map.tileOccupation.getGroundObjectsOnTile(pushTile).filter((other: any) => other.isUnit() &&
+            other.owner === unit.owner &&
+            other.tile === pushTile &&
+            other.onBridge === !!targetBridge &&
+            !(other.isInfantry() && other.stance === StanceType.Paradrop) &&
+            !(other.isAircraft() && other.missileSpawnTrait));
+        if (pushableUnits.find((other: any) => other.moveTrait.collisionState === CollisionState.Waiting ||
+            other.unitOrderTrait.hasTasks())) {
             this.children.push(new WaitTicksTask(5));
             unit.moveTrait.collisionState = CollisionState.Waiting;
             unit.moveTrait.moveState = MoveState.PlanMove;
             return false;
         }
-        pushableUnits.forEach(unit => {
-            unit.unitOrderTrait.addTask(new MoveAsideTask(this.game, this.fromDirection));
+        pushableUnits.forEach((other: any) => {
+            other.unitOrderTrait.addTask(new MoveAsideTask(this.game, this.fromDirection));
         });
         this.children.push(new WaitTicksTask(1));
         unit.moveTrait.collisionState = CollisionState.Waiting;

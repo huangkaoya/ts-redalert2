@@ -96,6 +96,9 @@ export class ProductionQueue {
         quantity = Math.min(this.maxSize - this.size, quantity);
         const existingQuantity = this.find(rules).reduce((sum, item) => sum + item.quantity, 0);
         quantity = Math.min(this.maxItemQuantity - existingQuantity, quantity);
+        if (!quantity) {
+            return;
+        }
         const lastItem = this.items[this.items.length - 1];
         if (lastItem?.rules === rules) {
             lastItem.quantity += quantity;
@@ -111,12 +114,10 @@ export class ProductionQueue {
             });
         }
         this.size += quantity;
-        if (quantity) {
-            if (this._status === QueueStatus.Idle) {
-                this._status = QueueStatus.Active;
-            }
-            this._onUpdate.dispatch(this);
+        if (this._status === QueueStatus.Idle) {
+            this._status = QueueStatus.Active;
         }
+        this._onUpdate.dispatch(this);
     }
     insertAfterFirst(rules: any, quantity: number, creditsEach: number) {
         quantity = Math.min(this.maxSize - this.size, quantity);

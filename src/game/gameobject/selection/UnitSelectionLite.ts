@@ -19,7 +19,9 @@ export class UnitSelectionLite {
         }
     }
     getSelectedUnits(): GameObject[] {
-        return [...this.selectedUnits].filter(unit => !unit.isDestroyed && !unit.isCrashing);
+        return [...this.selectedUnits]
+            .map((unit: any) => (unit.isDisposed && unit.replacedBy ? unit.replacedBy : unit))
+            .filter((unit) => !unit.isDestroyed && !unit.isCrashing);
     }
     isSelected(unit: GameObject): boolean {
         return this.selectedUnits.has(unit);

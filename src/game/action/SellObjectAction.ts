@@ -11,14 +11,19 @@ export class SellObjectAction extends Action {
         super(ActionType.SellObject);
         this.game = game;
     }
+    static decodePayload(data: Uint8Array): { objectId: number } {
+        return { objectId: new DataStream(data).readUint32() };
+    }
+    static encodePayload(payload: { objectId: number }): Uint8Array {
+        const stream = new DataStream(4);
+        stream.writeUint32(payload.objectId);
+        return stream.toUint8Array();
+    }
     unserialize(data: Uint8Array): void {
-        this.objectId = new DataStream(data).readUint32();
+        this.objectId = SellObjectAction.decodePayload(data).objectId;
     }
     serialize(): Uint8Array {
-        const stream = new DataStream(4);
-        stream.dynamicSize = false;
-        stream.writeUint32(this.objectId);
-        return stream.toUint8Array();
+        return SellObjectAction.encodePayload({ objectId: this.objectId });
     }
     print(): string {
         return `Sell object ${this.objectId}`;

@@ -18,6 +18,11 @@ export class ChangeHouseAllExecutor extends TriggerExecutor {
         else {
             targetPlayer = game.getAllPlayers().find((player: any) => player.country?.id === targetHouseId);
         }
+        if (targetPlayer?.defeated) {
+            targetPlayer = game.isAssetRedistributionEnabled()
+                ? game.alliances.getAllies(sourcePlayer)[0]
+                : undefined;
+        }
         if (!targetPlayer) {
             return;
         }

@@ -115,7 +115,7 @@ export class Production {
         return this.getQueue(this.getQueueTypeForFactory(type));
     }
     isAvailableForProduction(object: any): boolean {
-        return (object.isAvailableTo(this.player.country) &&
+        return (
             object.techLevel !== -1 &&
             object.techLevel <= this.maxTechLevel &&
             !(object.buildLimit === 0 && !this.player.isAi) &&
@@ -123,8 +123,8 @@ export class Production {
                 this.rules.getSuperWeapon(object.superWeapon).disableableFromShell &&
                 !this.gameOpts.superWeapons) &&
             this.hasFactoryFor(object) &&
-            this.meetsPrerequisites(object) &&
-            this.meetsStolenTech(object));
+            this.meetsPrerequisites(object)
+        );
     }
     getAvailableObjects(): any[] {
         return this.allAvailableObjects.filter(obj => this.isAvailableForProduction(obj));
@@ -141,7 +141,9 @@ export class Production {
     meetsStolenTech(object: any): boolean {
         return object.requiresStolenAlliedTech
             ? this.stolenTech.has(SideType.GDI)
-            : !object.requiresStolenSovietTech || this.stolenTech.has(SideType.Nod);
+            : object.requiresStolenSovietTech
+              ? this.stolenTech.has(SideType.Nod)
+              : !object.requiresStolenThirdTech || this.stolenTech.has(SideType.ThirdSide);
     }
     getFactoryTypeFor(object: any): FactoryType {
         if (object.type === ObjectType.Building)
@@ -154,6 +156,14 @@ export class Production {
     }
     meetsPrerequisites(object: any): boolean {
         const buildingNames = Array.from(this.player.buildings).map((b: any) => b.name);
+        for (const override of object.prerequisiteOverride) {
+            if (buildingNames.includes(override.toUpperCase())) {
+                return true;
+            }
+        }
+        if (!object.isAvailableTo(this.player.country)) {
+            return false;
+        }
         for (const prereq of object.prerequisite) {
             const upperPrereq = prereq.toUpperCase();
             if (PREREQ_MAP.has(upperPrereq)) {
@@ -172,14 +182,14 @@ export class Production {
                         break;
                     }
                 }
-                if (!hasPrereq)
+                if (!hasPrereq) {
                     return false;
-            }
-            else if (buildingNames.indexOf(upperPrereq) === -1) {
+                }
+            } else if (buildingNames.indexOf(upperPrereq) === -1) {
                 return false;
             }
         }
-        return true;
+        return !!this.meetsStolenTech(object);
     }
     getPrimaryFactory(type: FactoryType): any {
         return this.primaryFactories.get(type);

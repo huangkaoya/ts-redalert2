@@ -91,17 +91,13 @@ export class TileOccupation {
             return LandType.Rock;
         const baseLandType = getLandType(tile.terrainType);
         for (const obj of this.tileOccupation[tile.rx]?.[tile.ry] ?? []) {
-            if ((obj.isOverlay() || obj.isBuilding()) && obj.rules.wall) {
+            if (obj.isBuilding() && obj.rules.wall) {
                 return LandType.Wall;
             }
-            if (obj.isOverlay() && obj.isTiberium()) {
-                return LandType.Tiberium;
-            }
-            if (obj.isOverlay() &&
-                obj.rules.land !== LandType.Clear &&
-                !obj.isBridge() &&
-                !obj.isBridgePlaceholder()) {
-                return obj.rules.land;
+            if (obj.isOverlay() && !obj.isBridge() && !obj.isBridgePlaceholder()) {
+                if (obj.getLandType() !== LandType.Clear) {
+                    return obj.getLandType();
+                }
             }
         }
         return baseLandType;
@@ -109,7 +105,7 @@ export class TileOccupation {
     computeOnBridgeLandType(tile: any): LandType | undefined {
         for (const obj of this.tileOccupation[tile.rx]?.[tile.ry] ?? []) {
             if (obj.isOverlay() && obj.isBridge()) {
-                return obj.isHighBridge() ? LandType.Road : obj.rules.land;
+                return obj.getLandType();
             }
         }
     }

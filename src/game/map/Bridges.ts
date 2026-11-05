@@ -3,9 +3,7 @@ import { BridgeOverlayTypes, OverlayBridgeType } from "@/game/map/BridgeOverlayT
 import { DirectionalTileFinder } from "@/game/map/tileFinder/DirectionalTileFinder";
 import { RadialTileFinder } from "@/game/map/tileFinder/RadialTileFinder";
 import { TileSets, HighBridgeHeadType } from "@/game/theater/TileSets";
-import { TerrainType } from "@/engine/type/TerrainType";
 import { Vector2 } from "@/game/math/Vector2";
-import { FloodTileFinder } from "@/game/map/tileFinder/FloodTileFinder";
 import { MapBounds } from "@/game/map/MapBounds";
 export enum BridgeHeadType {
     None = 0,
@@ -64,6 +62,7 @@ interface BridgeSpec {
     end: Tile;
     type: OverlayBridgeType;
     isHigh: boolean;
+    isXBridge: boolean;
 }
 interface HighBridgeBoundary {
     tile: Tile;
@@ -408,6 +407,7 @@ export class Bridges {
             end: isStartHead ? endTile : startTile,
             type: bridgeType,
             isHigh: isHighBridge,
+            isXBridge,
         };
     }
     private findHighBridgeBoundary(tile: Tile): HighBridgeBoundary | undefined {
@@ -421,7 +421,6 @@ export class Bridges {
         let deltaY = 0;
         switch (headType) {
             case HighBridgeHeadType.TopLeft:
-            case HighBridgeHeadType.MiddleTlBr:
                 deltaX = 1;
                 deltaY = 0;
                 break;
@@ -430,7 +429,6 @@ export class Bridges {
                 deltaY = 0;
                 break;
             case HighBridgeHeadType.TopRight:
-            case HighBridgeHeadType.MiddleTrBl:
                 deltaX = 0;
                 deltaY = 1;
                 break;
@@ -438,19 +436,35 @@ export class Bridges {
                 deltaX = 0;
                 deltaY = -1;
                 break;
+            case HighBridgeHeadType.MiddleTlBr:
+                deltaX = 1;
+                deltaY = 0;
+                break;
+            case HighBridgeHeadType.MiddleTrBl:
+                deltaX = 0;
+                deltaY = 1;
+                break;
             default:
                 throw new Error(`Unhandled head type "${headType}"`);
         }
-        const floodFinder = new FloodTileFinder(this.tiles, this.mapBounds, tile, (t: Tile) => t.tileNum === tile.tileNum, (t: Tile) => t.terrainType === TerrainType.Pavement && t.z >= tile.z, false);
-        const tiles: Tile[] = [];
-        let foundTile: Tile | null;
-        while (foundTile = floodFinder.getNextTile()) {
-            tiles.push(foundTile);
-        }
-        if (tiles.length) {
-            tiles.sort((a, b) => 100 * (deltaX ? deltaX * (b.rx - a.rx) : deltaY * (b.ry - a.ry)) +
-                (deltaX ? a.ry - b.ry : a.rx - b.rx));
-            return { tile: tiles[0], headType };
+        const relativePositions = tileData.getRelativeTilePositions();
+        const boundarySubTile = relativePositions
+            .filter((pos) => pos.z === 4)
+            .sort(
+                (a, b) =>
+                    100 * (deltaX ? deltaX * (b.rx - a.rx) : deltaY * (b.ry - a.ry)) +
+                    (deltaX ? a.ry - b.ry : a.rx - b.rx),
+            )[0].subTile;
+        const offsetRx = relativePositions[boundarySubTile].rx - relativePositions[tile.subTile].rx;
+        const offsetRy = relativePositions[boundarySubTile].ry - relativePositions[tile.subTile].ry;
+        const boundaryTile = this.tiles.getByMapCoords(tile.rx + offsetRx, tile.ry + offsetRy);
+        if (boundaryTile) {
+            if (boundaryTile.subTile === boundarySubTile && boundaryTile.tileNum === tile.tileNum) {
+                return { tile: boundaryTile, headType };
+            }
+            console.warn(
+                `Found invalid bridge boundary tile. (${tile.rx},${tile.ry})+(${offsetRx},${offsetRy})`,
+            );
         }
     }
     canBeRepaired(spec: BridgeSpec): boolean {
@@ -512,6 +526,13 @@ export class Bridges {
             tiles.push(pieceTile, secondTile, thirdTile);
         }
         return tiles;
+    }
+    getBridgeSize(spec: BridgeSpec): { width: number; height: number } {
+        const isHorizontal = spec.start.rx !== spec.end.rx;
+        return {
+            width: isHorizontal ? spec.end.rx - spec.start.rx + 1 : 3,
+            height: isHorizontal ? 3 : spec.end.ry - spec.start.ry + 1,
+        };
     }
     findBridgePieces(spec: BridgeSpec): BridgePiece[] {
         const finder = this.createBridgePieceTileFinder(spec, (tile: Tile) => !!this.getPieceAtTile(tile));

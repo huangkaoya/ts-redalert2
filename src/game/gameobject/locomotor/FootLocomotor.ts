@@ -57,10 +57,8 @@ export class FootLocomotor {
             obj.moveTrait.velocity.set(moveVector.x, 0, moveVector.y);
         }
         const distance = Math.min(this.distanceToWaypoint.length(), speed);
-        const isPaused = !distance && this.endPauseFrames > 0;
-        if (isPaused) {
-            this.endPauseFrames--;
-        }
+        // 完善模拟层逻辑：`!a && 0 < this.endPauseFrames--` (post-decrement when stopped).
+        const isPaused = !distance && 0 < this.endPauseFrames--;
         this.distanceToWaypoint.setLength(distance);
         return {
             distance: new Vector3(this.distanceToWaypoint.x, 0, this.distanceToWaypoint.y),

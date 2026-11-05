@@ -47,10 +47,15 @@ export class UnitRepairTrait {
                     if (this.tickRepair(unit, world, gameObject)) {
                         repairSuccessful = true;
                     }
-                    if (repairSuccessful &&
-                        this.status === RepairStatus.Idle &&
-                        !this.lastRepairTickSuccessful &&
-                        !gameObject.helipadTrait) {
+                    // 完善模拟层逻辑
+                    // !e || (status !== Idle && lastSuccessful) || helipad || dispatch
+                    // ⇒ dispatch when e && (status === Idle || !lastSuccessful) && !helipad
+                    if (
+                        repairSuccessful &&
+                        (this.status === RepairStatus.Idle ||
+                            !this.lastRepairTickSuccessful) &&
+                        !gameObject.helipadTrait
+                    ) {
                         world.events.dispatch(new UnitRepairStartEvent(unit));
                     }
                 }

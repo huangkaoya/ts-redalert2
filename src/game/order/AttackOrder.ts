@@ -119,43 +119,57 @@ export class AttackOrder extends Order {
             !weapon.warhead.rules.bombDisarm) {
             return false;
         }
-        if (!this.forceAttack &&
-            targetObj?.isOverlay?.() &&
-            targetObj.isBridge?.() &&
-            !weapon.warhead.rules.wall) {
+        const canMoveOrInRange =
+            (this.sourceObject.isUnit() &&
+                this.sourceObject.moveTrait &&
+                !this.sourceObject.moveTrait.isDisabled()) ||
+            this.rangeHelper.isInWeaponRange(
+                this.sourceObject,
+                targetObj || this.target.tile,
+                weapon,
+                this.game.rules,
+            );
+        if (!canMoveOrInRange) {
             return false;
         }
-        const canMoveOrInRange = (this.sourceObject.isUnit() &&
-            this.sourceObject.moveTrait &&
-            !this.sourceObject.moveTrait.isDisabled()) ||
-            this.rangeHelper.isInWeaponRange(this.sourceObject, targetObj || this.target.tile, weapon, this.game.rules);
-        if (!canMoveOrInRange)
-            return false;
-        if (this.sourceObject.airSpawnTrait &&
+        if (
+            this.sourceObject.airSpawnTrait &&
             weapon.rules.spawner &&
-            !this.game.map.isWithinBounds(this.target.tile)) {
+            !this.game.map.isWithinBounds(this.getSpawnerTargetTile())
+        ) {
             return false;
         }
-        if (this.forceAttack)
+        if (this.forceAttack) {
             return true;
-        if (targetObj?.isBuilding() && targetObj.hospitalTrait)
-            return false;
-        if (!targetObj || !targetObj.healthTrait)
-            return false;
-        if (targetObj.isDestroyed || targetObj.isCrashing)
-            return false;
-        if (targetObj.isOverlay() &&
-            !targetObj.isBridge?.() &&
-            (weapon.warhead.rules.wall ||
-                (weapon.warhead.rules.wood && targetObj.rules.armor === ArmorType.Wood)) &&
-            !targetObj.isTechno()) {
+        }
+        if (targetObj?.isBuilding() && targetObj.hospitalTrait) {
             return false;
         }
-        return true;
+        if (!targetObj || !targetObj.healthTrait) {
+            return false;
+        }
+        if (targetObj.isDestroyed || targetObj.isCrashing) {
+            return false;
+        }
+        return (
+            (targetObj.isOverlay() &&
+                (weapon.warhead.rules.wall ||
+                    (weapon.warhead.rules.wood && targetObj.rules.armor === ArmorType.Wood))) ||
+            targetObj.isTechno()
+        );
     }
     isAllowed(): boolean {
         return !this.sourceObject.attackTrait.isDisabled();
     }
+    getSpawnerTargetTile(): any {
+        const obj = this.target.obj;
+        return obj?.isBuilding() && !this.game.map.isWithinBounds(obj.centerTile)
+            ? this.game.map.tileOccupation
+                  .calculateTilesForGameObject(obj.tile, obj)
+                  .find((tile: any) => this.game.map.isWithinBounds(tile)) ?? this.target.tile
+            : this.target.tile;
+    }
+
     process(): any[] {
         if (this.isC4) {
             return [new PlantC4Task(this.game, this.target.obj)];
@@ -171,15 +185,38 @@ export class AttackOrder extends Order {
         const unit = this.sourceObject;
         if (!isQueued && unit.isUnit() && this.isValid() && this.isAllowed()) {
             if (unit.rules.movementZone === MovementZone.Fly) {
-                const existingTask = tasks.find((task) => (task.constructor === MoveTask || task.constructor === AttackTask) &&
-                    !task.isCancelling());
-                if (existingTask &&
-                    (unit.moveTrait.currentWaypoint?.tile === this.target.tile ||
+                const existingTask = tasks.find(
+                    (task) =>
+                        (task.constructor === MoveTask || task.constructor === AttackTask) &&
+                        !task.isCancelling(),
+                );
+                let taskToCancel: any;
+                if (existingTask) {
+                    let weapon: any;
+                    if (
+                        unit.moveTrait.currentWaypoint?.tile === this.target.tile ||
                         unit.isAircraft() ||
-                        existingTask.constructor === AttackTask) &&
-                    existingTask.forceCancel(unit)) {
-                    const taskIndex = tasks.indexOf(existingTask);
-                    tasks.splice(taskIndex, 1);
+                        existingTask.constructor === AttackTask ||
+                        ((weapon = this.sourceObject.attackTrait.selectWeaponVersus(
+                            this.sourceObject,
+                            this.target,
+                            this.game,
+                            this.forceAttack,
+                        )).projectileRules.vertical &&
+                            existingTask.constructor === MoveTask &&
+                            this.rangeHelper.isInWeaponRange(
+                                this.sourceObject,
+                                this.target.obj || this.target.tile,
+                                weapon,
+                                this.game.rules,
+                            ))
+                    ) {
+                        taskToCancel = existingTask;
+                    }
+                }
+                if (taskToCancel?.forceCancel(unit)) {
+                    // 完善模拟层逻辑：splice(index) drops the cancelled task and everything after it.
+                    tasks.splice(tasks.indexOf(taskToCancel));
                 }
             }
             else {

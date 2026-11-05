@@ -19,6 +19,7 @@ import { NotifyProduceUnit } from "@/game/trait/interface/NotifyProduceUnit";
 import { Vector2 } from "@/game/math/Vector2";
 import { NotifyOwnerChange } from "@/game/gameobject/trait/interface/NotifyOwnerChange";
 import { NotifyDestroy } from "@/game/gameobject/trait/interface/NotifyDestroy";
+import { DeathType } from "@/game/gameobject/common/DeathType";
 import { ZoneType } from "@/game/gameobject/unit/ZoneType";
 import { WaitMinutesTask } from "@/game/gameobject/task/system/WaitMinutesTask";
 import { CallbackTask } from "@/game/gameobject/task/system/CallbackTask";
@@ -75,6 +76,7 @@ export class FactoryTrait {
             building.rules.deployTime &&
             this.deliveringUnit &&
             !this.deliveringUnit.isDestroyed &&
+            building.deathType !== DeathType.Temporal &&
             this.unitIsInsideFactory(this.deliveringUnit, building, world)) {
             world.destroyObject(this.deliveringUnit, attacker, weapon);
         }
@@ -323,7 +325,8 @@ export class FactoryTrait {
     } {
         const foundation = building.getFoundation();
         let { rx, ry } = this.computeBarracksDefaultExitCoords(building);
-        if (foundation.width <= 2 || foundation.height <= 2 || building.rules.gdiBarracks) {
+        // 完善模拟层逻辑：!(w<=2||h<=2) || gdiBarracks → ry+=1; else nodBarracks offsets.
+        if (!(foundation.width <= 2 || foundation.height <= 2) || building.rules.gdiBarracks) {
             ry += 1;
         }
         else if (building.rules.nodBarracks) {

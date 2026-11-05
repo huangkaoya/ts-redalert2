@@ -7,12 +7,14 @@ export class ParadropRules {
     private allyParaDrop: ParadropSquad[] = [];
     private amerParaDrop: ParadropSquad[] = [];
     private sovParaDrop: ParadropSquad[] = [];
+    private yuriParaDrop: ParadropSquad[] = [];
     private paradropPlane: string = '';
     private paradropRadius: number = 0;
     readIni(ini: any): ParadropRules {
         this.allyParaDrop = this.readParadropSquad(ini.getArray("AllyParaDropInf"), ini.getNumberArray("AllyParaDropNum"), "Ally");
         this.amerParaDrop = this.readParadropSquad(ini.getArray("AmerParaDropInf"), ini.getNumberArray("AmerParaDropNum"), "Amer");
         this.sovParaDrop = this.readParadropSquad(ini.getArray("SovParaDropInf"), ini.getNumberArray("SovParaDropNum"), "Sov");
+        this.yuriParaDrop = this.readParadropSquad(ini.getArray("YuriParaDropInf"), ini.getNumberArray("YuriParaDropNum"), "Yuri");
         this.paradropPlane = ini.getString("ParadropPlane");
         if (!this.paradropPlane) {
             throw new Error("Missing rules [General]->ParadropPlane");
@@ -38,6 +40,8 @@ export class ParadropRules {
                 return this.allyParaDrop;
             case SideType.Nod:
                 return this.sovParaDrop;
+            case SideType.ThirdSide:
+                return this.yuriParaDrop;
             default:
                 throw new Error(`Unhandled side type "${side}"`);
         }

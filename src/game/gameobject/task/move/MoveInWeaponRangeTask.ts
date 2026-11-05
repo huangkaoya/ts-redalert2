@@ -23,12 +23,24 @@ export class MoveInWeaponRangeTask extends MoveTask {
     private losHelper: LosHelper;
     private bomberManeuverTile?: any;
     private bomberQueuedTargetTile?: any;
-    constructor(game: any, target: any, unit: any, weapon: any) {
-        super(game, target instanceof GameObject
+    static getMoveTargetTile(game: any, target: any): any {
+        return target instanceof GameObject
             ? target.isBuilding()
-                ? (target as any).centerTile
+                ? game.map.isWithinBounds((target as any).centerTile)
+                    ? (target as any).centerTile
+                    : MoveInWeaponRangeTask.getInBoundsFoundationTile(game, target) ?? target.tile
                 : target.tile
-            : target, unit, {
+            : target;
+    }
+
+    static getInBoundsFoundationTile(game: any, building: any): any {
+        return game.map.tileOccupation
+            .calculateTilesForGameObject(building.tile, building)
+            .find((tile: any) => game.map.isWithinBounds(tile));
+    }
+
+    constructor(game: any, target: any, unit: any, weapon: any) {
+        super(game, MoveInWeaponRangeTask.getMoveTargetTile(game, target), unit, {
             pathFinderIgnoredBlockers: target instanceof GameObject && weapon.range > 0 ? [target] : undefined,
         });
         this.target = target;
@@ -144,11 +156,7 @@ export class MoveInWeaponRangeTask extends MoveTask {
         }
     }
     retarget(newTarget: any, updatePath: boolean) {
-        const targetTile = newTarget instanceof GameObject
-            ? newTarget.isBuilding()
-                ? (newTarget as any).centerTile
-                : newTarget.tile
-            : newTarget;
+        const targetTile = MoveInWeaponRangeTask.getMoveTargetTile(this.game, newTarget);
         if (this.bomberManeuverTile) {
             this.bomberQueuedTargetTile = targetTile;
         }
@@ -180,12 +188,8 @@ export class MoveInWeaponRangeTask extends MoveTask {
             }
         }
         if (this.shouldAirStrafe(unit) && !this.isCancelling()) {
-            this.updateTarget(this.target instanceof GameObject
-                ? this.target.isBuilding()
-                    ? (this.target as any).centerTile
-                    : this.target.tile
-                : this.target, false);
-            if (!this.isAirStrafeCloseEnough(unit)) {
+            this.updateTarget(MoveInWeaponRangeTask.getMoveTargetTile(this.game, this.target), false);
+            if (this.isAirStrafeCloseEnough(unit)) {
                 const strafeDest = this.findStrafeDestination(unit, this.targetTile);
                 if (strafeDest) {
                     this.updateTarget(strafeDest, false);
@@ -198,11 +202,7 @@ export class MoveInWeaponRangeTask extends MoveTask {
             !this.bomberManeuverTile) {
             this.bomberInitialLock = false;
             const unitPos = unit.position.getMapPosition();
-            const targetTile = this.target instanceof GameObject
-                ? this.target.isBuilding()
-                    ? (this.target as any).centerTile
-                    : this.target.tile
-                : this.target;
+            const targetTile = MoveInWeaponRangeTask.getMoveTargetTile(this.game, this.target);
             const direction = new Vector2(targetTile.rx + 0.5, targetTile.ry + 0.5)
                 .clone()
                 .multiplyScalar(Coords.LEPTONS_PER_TILE)

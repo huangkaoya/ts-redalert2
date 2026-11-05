@@ -6,8 +6,9 @@ export class HealthBelowCombatCondition extends TriggerCondition {
         super(id, targets);
         this.threshold = threshold;
     }
-    check(events: any[], targets: any[]): any[] {
-        return targets
+    // 完善模拟层逻辑：check(context, events) — filter the events list (2nd arg).
+    check(_context: any, events: any[]): any[] {
+        return events
             .filter((event) => {
             if (event.type !== EventType.InflictDamage)
                 return false;

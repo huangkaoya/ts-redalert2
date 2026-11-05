@@ -16,7 +16,6 @@ import { NotifyTileChange } from "@/game/gameobject/trait/interface/NotifyTileCh
 import { EnterTileEvent } from "@/game/event/EnterTileEvent";
 import { Vector3 } from "@/game/math/Vector3";
 import { NotifyElevationChange } from "@/game/trait/interface/NotifyElevationChange";
-import { Target } from "@/game/Target";
 interface GameObject {
     rules: any;
     veteranTrait?: any;
@@ -200,14 +199,6 @@ export class MoveTrait {
     }
     handleTileChange(oldTile: any, bridge: any, teleporting: boolean, gameState: GameState, isTeleport: boolean = false): void {
         const gameObject = this.gameObject;
-        if (Target.usesGroundLayerUnderBridge(gameObject)) {
-            bridge = undefined;
-            if (gameObject.onBridge) {
-                gameObject.onBridge = false;
-                gameObject.position.tileElevation = 0;
-                gameObject.zone = getZoneType(gameObject.tile.landType);
-            }
-        }
         gameState.map.tileOccupation.unoccupyTileRange(oldTile, gameObject);
         gameState.map.tileOccupation.occupyTileRange(gameObject.tile, gameObject);
         gameState.map.technosByTile.updateObject(gameObject);

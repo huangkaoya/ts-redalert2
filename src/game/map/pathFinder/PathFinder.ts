@@ -20,7 +20,7 @@ interface Graph {
     getNode(id: string): any;
 }
 export class PathFinder {
-    private readonly bestEffort: boolean;
+    private readonly bestEffort: boolean | undefined;
     private readonly maxExpandedNodes: number;
     private readonly heuristic: (from: any, to: any, state?: any) => number;
     private readonly distance: (from: any, to: any) => number;
@@ -28,8 +28,9 @@ export class PathFinder {
     private readonly searchStatePool: SearchStatePool;
     private readonly graph: Graph;
     constructor(graph: Graph, options: PathFinderOptions = {}) {
-        this.bestEffort = options.bestEffort ?? false;
-        this.maxExpandedNodes = options.maxExpandedNodes ?? Number.POSITIVE_INFINITY;
+        // 完善模拟层逻辑：bestEffort has no default; maxExpandedNodes uses || (not ??).
+        this.bestEffort = options.bestEffort;
+        this.maxExpandedNodes = options.maxExpandedNodes || Number.POSITIVE_INFINITY;
         this.heuristic = options.heuristic ?? (() => 0);
         this.distance = options.distance ?? (() => 1);
         this.excludedNodes = options.excludedNodes;

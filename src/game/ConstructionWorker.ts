@@ -190,9 +190,7 @@ export class ConstructionWorker {
             width: foundation.width,
             height: foundation.height,
         };
-        if (!buildingRules.constructionYard &&
-            !ignoreAdjacent &&
-            !this.meetsAdjacency(buildingRect, buildingRules.adjacent)) {
+        if (!ignoreAdjacent && !this.meetsAdjacency(buildingRect, buildingRules.adjacent)) {
             canPlace = false;
         }
         for (let x = 0; x < foundation.width; x++) {
@@ -208,7 +206,7 @@ export class ConstructionWorker {
                 }
             }
         }
-        if (buildingRules.wall && previewTiles[0]?.buildable) {
+        if (buildingRules.wall && previewTiles[0].buildable) {
             const connectingTiles = this.getWallConnectingTiles(placementTile, buildingRules);
             connectingTiles.forEach((tile) => {
                 previewTiles.push({ rx: tile.rx, ry: tile.ry, buildable: true });
@@ -230,9 +228,7 @@ export class ConstructionWorker {
             width: foundation.width,
             height: foundation.height,
         };
-        if (!buildingRules.constructionYard &&
-            !ignoreAdjacent &&
-            !this.meetsAdjacency(buildingRect, buildingRules.adjacent)) {
+        if (!ignoreAdjacent && !this.meetsAdjacency(buildingRect, buildingRules.adjacent)) {
             return false;
         }
         for (let x = 0; x < foundation.width; x++) {

@@ -15,18 +15,35 @@ export class PingLocationAction extends Action {
         super(ActionType.PingLocation);
         this.game = game;
     }
-    unserialize(data: Uint8Array): void {
+    static decodePayload(data: Uint8Array): { tile: { rx: number; ry: number } } {
         const stream = new DataStream(data);
+        return {
+            tile: {
+                rx: stream.readUint16(),
+                ry: stream.readUint16(),
+            },
+        };
+    }
+    static encodePayload(payload: { tile: { rx: number; ry: number } }): Uint8Array {
+        const stream = new DataStream(4);
+        stream.writeUint16(payload.tile.rx);
+        stream.writeUint16(payload.tile.ry);
+        return stream.toUint8Array();
+    }
+    unserialize(data: Uint8Array): void {
+        const payload = PingLocationAction.decodePayload(data);
         this.tile = {
-            x: stream.readUint16(),
-            y: stream.readUint16()
+            x: payload.tile.rx,
+            y: payload.tile.ry,
         };
     }
     serialize(): Uint8Array {
-        const stream = new DataStream(4);
-        stream.writeUint16(this.tile.x);
-        stream.writeUint16(this.tile.y);
-        return stream.toUint8Array();
+        return PingLocationAction.encodePayload({
+            tile: {
+                rx: this.tile.x,
+                ry: this.tile.y,
+            },
+        });
     }
     print(): string {
         return `Ping location at tile (${this.tile.x}, ${this.tile.y})`;

@@ -13,15 +13,25 @@ export class ToggleAllianceAction extends Action {
         super(ActionType.ToggleAlliance);
         this.game = game;
     }
+    static decodePayload(data: Uint8Array): { playerId: number; toggle: boolean } {
+        return {
+            playerId: data[0],
+            toggle: Boolean(data[1]),
+        };
+    }
+    static encodePayload(payload: { playerId: number; toggle: boolean }): Uint8Array {
+        return new Uint8Array([payload.playerId, Number(payload.toggle)]);
+    }
     unserialize(data: Uint8Array): void {
-        this.toPlayer = this.game.getPlayer(data[0]);
-        this.toggle = Boolean(data[1]);
+        const payload = ToggleAllianceAction.decodePayload(data);
+        this.toPlayer = this.game.getPlayer(payload.playerId);
+        this.toggle = payload.toggle;
     }
     serialize(): Uint8Array {
-        return new Uint8Array([
-            this.game.getPlayerNumber(this.toPlayer),
-            this.toggle ? 1 : 0
-        ]);
+        return ToggleAllianceAction.encodePayload({
+            playerId: this.game.getPlayerNumber(this.toPlayer),
+            toggle: this.toggle,
+        });
     }
     print(): string {
         return `Toggle alliance ${this.toggle ? "on" : "off"} with ${this.toPlayer.name}`;

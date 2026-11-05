@@ -4,29 +4,27 @@ import { TriggerCondition } from "@/game/trigger/TriggerCondition";
 export class DestroyedAllUnitsCondition extends TriggerCondition {
     private allDestroyed: boolean;
     private houseId: number;
-    constructor(params: any[], trigger: any) {
-        super(params, trigger);
+    constructor(event: any, trigger: any) {
+        super(event, trigger);
         this.allDestroyed = false;
-        this.houseId = Number(params[1]);
+        this.houseId = Number(event.params[1]);
     }
-    check(events: any[], context: any): boolean {
-        if (this.allDestroyed) {
-            return true;
-        }
-        const hasDestroyedAll = events.some((event) => {
-            if (event.type !== EventType.ObjectDestroy) {
-                return false;
-            }
-            const target = event.target;
-            if (!target.isUnit() || target.owner.country?.id !== this.houseId) {
-                return false;
-            }
-            return !this.hasUnitsLeft(target.owner);
-        });
-        if (hasDestroyedAll) {
-            this.allDestroyed = true;
-        }
-        return hasDestroyedAll;
+    // 完善模拟层逻辑：check(context, events) — scan the events list (2nd arg).
+    check(_context: any, events: any[]): boolean {
+        return (
+            !!this.allDestroyed ||
+            (!!events.some((event) => {
+                if (event.type !== EventType.ObjectDestroy) {
+                    return false;
+                }
+                const target = event.target;
+                return (
+                    !(!target.isUnit() || target.owner.country?.id !== this.houseId) &&
+                    !this.hasUnitsLeft(target.owner)
+                );
+            }) &&
+                (this.allDestroyed = true))
+        );
     }
     private hasUnitsLeft(owner: any): boolean {
         const unitTypes = [

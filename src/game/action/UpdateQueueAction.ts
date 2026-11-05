@@ -21,38 +21,81 @@ export class UpdateQueueAction extends Action {
         super(ActionType.UpdateQueue);
         this.game = game;
     }
-    unserialize(data: Uint8Array): void {
+    static decodePayload(data: Uint8Array): {
+        queueType: number;
+        updateType: UpdateType;
+        item?: { id: number; type: number; quantity: number };
+    } {
         const stream = new DataStream(data);
-        this.queueType = stream.readUint8();
-        this.updateType = stream.readUint8();
-        if (this.updateType === UpdateType.Add ||
-            this.updateType === UpdateType.Cancel ||
-            this.updateType === UpdateType.AddNext) {
-            const index = stream.readUint32();
-            const type = stream.readUint8();
-            this.item = this.game.rules.getTechnoByInternalId(index, type);
-            this.quantity = stream.readUint16();
+        const payload: {
+            queueType: number;
+            updateType: UpdateType;
+            item?: { id: number; type: number; quantity: number };
+        } = {
+            queueType: stream.readUint8(),
+            updateType: stream.readUint8(),
+        };
+        if (
+            payload.updateType === UpdateType.Add ||
+            payload.updateType === UpdateType.Cancel ||
+            payload.updateType === UpdateType.AddNext
+        ) {
+            payload.item = {
+                id: stream.readUint32(),
+                type: stream.readUint8(),
+                quantity: stream.readUint16(),
+            };
+        }
+        return payload;
+    }
+    static encodePayload(payload: {
+        queueType: number;
+        updateType: UpdateType;
+        item?: { id: number; type: number; quantity: number };
+    }): Uint8Array {
+        const stream = new DataStream(9);
+        stream.dynamicSize = false;
+        stream.writeUint8(payload.queueType);
+        stream.writeUint8(payload.updateType);
+        if (
+            payload.updateType === UpdateType.Add ||
+            payload.updateType === UpdateType.Cancel ||
+            payload.updateType === UpdateType.AddNext
+        ) {
+            if (!payload.item) {
+                throw new Error("Missing quantity");
+            }
+            if (payload.item.quantity > 65535) {
+                throw new Error("Maximum quantity exceeded");
+            }
+            stream.writeUint32(payload.item.id);
+            stream.writeUint8(payload.item.type);
+            stream.writeUint16(payload.item.quantity);
+        }
+        return new Uint8Array(stream.buffer, stream.byteOffset, stream.position);
+    }
+    unserialize(data: Uint8Array): void {
+        const payload = UpdateQueueAction.decodePayload(data);
+        this.queueType = payload.queueType;
+        this.updateType = payload.updateType;
+        if (payload.item) {
+            this.item = this.game.rules.getTechnoByInternalId(payload.item.id, payload.item.type);
+            this.quantity = payload.item.quantity;
         }
     }
     serialize(): Uint8Array {
-        const stream = new DataStream(9);
-        stream.dynamicSize = false;
-        stream.writeUint8(this.queueType);
-        stream.writeUint8(this.updateType);
-        if (this.updateType === UpdateType.Add ||
-            this.updateType === UpdateType.Cancel ||
-            this.updateType === UpdateType.AddNext) {
-            if (this.quantity === undefined) {
-                throw new Error("Missing quantity");
-            }
-            if (this.quantity > 65535) {
-                throw new Error("Maximum quantity exceeded");
-            }
-            stream.writeUint32(this.item.index);
-            stream.writeUint8(this.item.type);
-            stream.writeUint16(this.quantity);
-        }
-        return new Uint8Array(stream.buffer, stream.byteOffset, stream.position);
+        return UpdateQueueAction.encodePayload({
+            queueType: this.queueType,
+            updateType: this.updateType,
+            item:
+                this.item && this.quantity !== undefined
+                    ? {
+                        id: this.item.index,
+                        type: this.item.type,
+                        quantity: this.quantity,
+                    }
+                    : undefined,
+        });
     }
     print(): string {
         switch (this.updateType) {

@@ -24,8 +24,10 @@ import { Weapon } from "@/game/Weapon";
 interface IniFile {
     getSection(name: string): IniSection | undefined;
     getOrCreateSection(name: string): IniSection;
+    getOrderedSections(): IniSection[];
 }
 interface IniSection {
+    name: string;
     entries: Map<string, any>;
 }
 interface Logger {
@@ -40,8 +42,8 @@ interface ObjectRules {
     occupyWeapon?: string;
     eliteOccupyWeapon?: string;
     weaponCount?: number;
-    getWeaponAtIndex?(index: number): string;
-    getEliteWeaponAtIndex?(index: number): string;
+    getWeaponAtIndex(index: number): string;
+    getEliteWeaponAtIndex(index: number): string;
 }
 interface SpecialFlags {
     initialVeteran?: boolean;
@@ -96,8 +98,8 @@ export class Rules {
         this.logger = logger;
         this.init();
     }
-    hasObject(name: string, type: ObjectType): boolean {
-        return this.allObjectRules.get(type)?.has(name) ?? false;
+    hasObject(name: string, type: ObjectType): boolean | undefined {
+        return this.allObjectRules.get(type)?.has(name);
     }
     getObject(name: string, type: ObjectType): ObjectRules {
         const rules = this.allObjectRules.get(type)?.get(name);
@@ -155,25 +157,18 @@ export class Rules {
         return this.getWeapon(weaponName);
     }
     getWarhead(name: string): WarheadRules {
-        let rules = this.warheadRules.get(name.toLowerCase());
+        const key = name.toLowerCase();
+        let rules = this.warheadRules.get(key);
         if (!rules) {
-            const section = this.ini.getSection(name);
-            if (section) {
-                rules = new WarheadRules(section);
-                this.warheadRules.set(name.toLowerCase(), rules);
+            let section = this.ini.getSection(name);
+            if (!section) {
+                section = this.ini.getOrderedSections().find((s) => s.name.toLowerCase() === key);
             }
-        }
-        if (!rules) {
-            try {
-                const known = Array.from(this.warheadRules.keys());
-                const sample = known.slice(0, 20).join(", ");
-                const hasSection = !!this.ini.getSection(name);
-                console.error(`[Diag] Unknown warhead "${name}". hasSection=${hasSection}. Known warheads (sample): ${sample} ... total=${known.length}`);
+            if (!section) {
+                throw new Error("Unknown warhead " + name);
             }
-            catch (e) {
-                console.error('[Diag] Unknown warhead diagnostics failed:', e);
-            }
-            throw new Error("Unknown warhead " + name);
+            rules = new WarheadRules(section);
+            this.warheadRules.set(key, rules);
         }
         return rules;
     }
@@ -449,12 +444,12 @@ export class Rules {
         this.powerups.readIni(section.entries);
     }
     private readTiberiums(): void {
-        this.tiberiumTypes.forEach(name => {
+        this.tiberiumTypes.forEach((name, id) => {
             const section = this.ini.getSection(name);
             if (!section) {
                 throw new Error("Missing rules section for tiberium type " + name);
             }
-            this.tiberiumRules.set(name, new TiberiumRules().readIni(section));
+            this.tiberiumRules.set(name, new TiberiumRules(id).readIni(section));
         });
     }
     private readSuperWeapons(): void {
@@ -494,8 +489,8 @@ export class Rules {
                     ? new Array(rules.weaponCount)
                         .fill(0)
                         .map((_, index) => [
-                        rules.getWeaponAtIndex?.(index),
-                        rules.getEliteWeaponAtIndex?.(index),
+                        rules.getWeaponAtIndex(index),
+                        rules.getEliteWeaponAtIndex(index),
                     ])
                         .flat()
                     : []),

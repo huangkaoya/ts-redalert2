@@ -18,7 +18,8 @@ export class ParasiteableTrait implements NotifyTick, NotifyHeal, NotifyDamage, 
     private parasite?: any;
     private parasiteWeapon?: any;
     private damageTickCooldown: number = 0;
-    private lastExternalDamageInflicted?: number;
+    private lastAttacker?: any;
+    private lastExternalBaseDamage?: number;
     private lastExternalDamageTick?: number;
     constructor(gameObject: any) {
         this.gameObject = gameObject;
@@ -28,7 +29,8 @@ export class ParasiteableTrait implements NotifyTick, NotifyHeal, NotifyDamage, 
         this.parasite = parasite;
         this.parasiteWeapon = weapon;
         this.damageTickCooldown = parasite.rules.organic ? getRockingTicks() : 0;
-        this.lastExternalDamageInflicted = undefined;
+        this.lastAttacker = undefined;
+        this.lastExternalBaseDamage = undefined;
         this.lastExternalDamageTick = undefined;
         if (weapon.warhead.rules.paralyzes) {
             this.gameObject.moveTrait.setDisabled(true);
@@ -107,20 +109,21 @@ export class ParasiteableTrait implements NotifyTick, NotifyHeal, NotifyDamage, 
             (target.isAircraft() && healer?.rules.unitReload)) {
             return;
         }
-        if (this.parasite.rules.organic) {
-            const parasite = this.parasite;
-            this.evictOrDestroyParasite(target, gameState);
-            this.stunParasite(parasite, gameState);
-        }
-        else {
+        if (!this.parasite.rules.organic || healer?.rules.unitRepair) {
             this.parasite.deathType = DeathType.None;
             gameState.destroyObject(this.parasite, healer ? { player: healer.owner, obj: healer } : undefined);
             this.uninfest();
         }
+        else {
+            const parasite = this.parasite;
+            this.evictOrDestroyParasite(target, gameState);
+            this.stunParasite(parasite, gameState);
+        }
     }
     [NotifyDamage.onDamage](target: any, gameState: any, damage: number, attacker: any): void {
         if (attacker?.obj !== this.parasite) {
-            this.lastExternalDamageInflicted = damage;
+            this.lastAttacker = attacker;
+            this.lastExternalBaseDamage = attacker?.weapon?.rules.damage ?? damage;
             this.lastExternalDamageTick = gameState.currentTick;
         }
     }
@@ -147,9 +150,7 @@ export class ParasiteableTrait implements NotifyTick, NotifyHeal, NotifyDamage, 
     [NotifyDestroy.onDestroy](target: any, gameState: any, destroyer: any, forced: boolean): void {
         if (!this.parasite || this.parasite.isDestroyed)
             return;
-        if (forced ||
-            (!this.parasite.invulnerableTrait.isActive() &&
-                this.shouldSupressParasite(gameState, this.parasite, destroyer))) {
+        if (forced || this.shouldSupressParasite(gameState, this.parasite)) {
             this.parasite.deathType = DeathType.None;
             gameState.destroyObject(this.parasite, destroyer, forced);
             this.uninfest();
@@ -159,21 +160,28 @@ export class ParasiteableTrait implements NotifyTick, NotifyHeal, NotifyDamage, 
             this.evictOrDestroyParasite(target, gameState);
         }
     }
-    private shouldSupressParasite(gameState: any, parasite: any, destroyer: any): boolean {
-        return destroyer?.obj !== parasite ||
-            (this.lastExternalDamageInflicted &&
-                this.lastExternalDamageInflicted > parasite.rules.suppressionThreshold &&
-                gameState.currentTick - this.lastExternalDamageTick! <
-                    2 * this.lastExternalDamageInflicted);
+    private shouldSupressParasite(gameState: any, parasite: any): boolean {
+        return !parasite.invulnerableTrait.isActive() &&
+            !!this.lastExternalBaseDamage &&
+            this.lastExternalBaseDamage > parasite.rules.suppressionThreshold &&
+            gameState.currentTick - this.lastExternalDamageTick! <
+                2 * (this.lastExternalBaseDamage - parasite.rules.suppressionThreshold);
     }
     [NotifyTeleport.onBeforeTeleport](target: any, gameState: any, fromTile: any, toTile: any): void {
         if (!fromTile || !toTile || !this.parasite || this.parasite.isDestroyed)
             return;
-        this.parasiteWeapon.expireCooldown();
-        const parasite = this.parasite;
-        this.evictOrDestroyParasite(target, gameState, true);
-        if (!parasite.isDestroyed) {
-            this.stunParasite(parasite, gameState);
+        if (this.shouldSupressParasite(gameState, this.parasite)) {
+            this.parasite.deathType = DeathType.None;
+            gameState.destroyObject(this.parasite, this.lastAttacker);
+            this.uninfest();
+        }
+        else {
+            this.parasiteWeapon.expireCooldown();
+            const parasite = this.parasite;
+            this.evictOrDestroyParasite(target, gameState, true);
+            if (!parasite.isDestroyed) {
+                this.stunParasite(parasite, gameState);
+            }
         }
     }
     private stunParasite(parasite: any, gameState: any): void {

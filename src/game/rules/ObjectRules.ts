@@ -24,7 +24,7 @@ export class ObjectRules {
         this.type = type;
         this.ini = ini;
         this.index = index;
-        this.generalRules = generalRules || {};
+        this.generalRules = generalRules;
         this.parse();
     }
     protected parse(): void {

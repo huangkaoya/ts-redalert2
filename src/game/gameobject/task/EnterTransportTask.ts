@@ -117,13 +117,8 @@ export class EnterTransportTask extends Task {
             if (!this.isAllowed(unit)) {
                 return true;
             }
-            // The passenger must be on the SAME layer as the transport to board.
-            // isTileOccupiedBy is purely coordinate-based, so without this a unit on
-            // a bridge deck would "board" a transport floating in the water directly
-            // below it (same rx,ry, different layer) without ever leaving the bridge.
-            const coLocated = this.game.map.tileOccupation.isTileOccupiedBy(unit.tile, this.target) &&
-                !!unit.onBridge === !!this.target.onBridge;
-            if (!coLocated) {
+            // 完善模拟层逻辑：only isTileOccupiedBy (coordinate occupancy), no onBridge layer gate.
+            if (!this.game.map.tileOccupation.isTileOccupiedBy(unit.tile, this.target)) {
                 if (this.movePerformed) {
                     return true;
                 }

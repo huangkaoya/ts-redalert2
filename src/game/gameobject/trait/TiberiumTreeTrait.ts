@@ -3,7 +3,7 @@ import { RadialTileFinder } from '@/game/map/tileFinder/RadialTileFinder';
 import { LandType } from '@/game/type/LandType';
 import { ObjectType } from '@/engine/type/ObjectType';
 import { OreSpread } from '@/game/map/OreSpread';
-import { OverlayTibType } from '@/engine/type/OverlayTibType';
+import { TiberiumType } from '@/engine/type/TiberiumType';
 import { TiberiumTrait } from './TiberiumTrait';
 export enum SpawnStatus {
     Idle = 0,
@@ -31,7 +31,7 @@ export class TiberiumTreeTrait {
             let finder = new RadialTileFinder(world.map.tiles, world.map.mapBounds, tile, { width: 1, height: 1 }, radius, radius, (tile) => TiberiumTrait.canBePlacedOn(tile, world.map));
             let targetTile = finder.getNextTile();
             if (targetTile) {
-                const overlayId = OreSpread.calculateOverlayId(OverlayTibType.Ore, targetTile);
+                const overlayId = OreSpread.calculateOverlayId(TiberiumType.Ore, targetTile);
                 if (overlayId === undefined) {
                     throw new Error('Expected an overlayId');
                 }

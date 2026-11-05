@@ -1,4 +1,4 @@
-import { OverlayTibType } from '@/engine/type/OverlayTibType';
+import { TiberiumType } from '@/engine/type/TiberiumType';
 export class OreOverlayTypes {
     static minIdRiparius = 102;
     static maxIdRiparius = 127;
@@ -8,16 +8,16 @@ export class OreOverlayTypes {
     static maxIdVinifera = 146;
     static minIdAboreus = 147;
     static maxIdAboreus = 166;
-    static getOverlayTibType(id: number): OverlayTibType {
+    static getOverlayTibType(id: number): TiberiumType | undefined {
         return this.isRiparius(id)
-            ? OverlayTibType.Riparius
+            ? TiberiumType.Riparius
             : this.isCruentus(id)
-                ? OverlayTibType.Cruentus
+                ? TiberiumType.Cruentus
                 : this.isVinifera(id)
-                    ? OverlayTibType.Vinifera
+                    ? TiberiumType.Vinifera
                     : this.isAboreus(id)
-                        ? OverlayTibType.Aboreus
-                        : OverlayTibType.NotSpecial;
+                        ? TiberiumType.Aboreus
+                        : undefined;
     }
     static isRiparius(id: number): boolean {
         return id >= this.minIdRiparius && id <= this.maxIdRiparius;

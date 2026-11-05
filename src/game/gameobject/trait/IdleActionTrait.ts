@@ -30,7 +30,7 @@ export class IdleActionTrait {
     doIdleAction(gameObject: GameObject, world: World): void {
         if (gameObject.isInfantry()) {
             if (gameObject.rules.fraidycat) {
-                if (world.generateRandom() > 0.5) {
+                if (gameObject.owner.isNeutral && world.generateRandom() > 0.5) {
                     gameObject.unitOrderTrait.addTask(new ScatterTask(world, undefined, { noSlopes: true }));
                     return;
                 }

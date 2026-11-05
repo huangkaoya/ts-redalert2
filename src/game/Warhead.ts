@@ -20,6 +20,7 @@ import { IniSection } from "@/data/IniSection";
 import { ProjectileRules } from "@/game/rules/ProjectileRules";
 import { AnimTerrainEffect } from "@/game/gameobject/common/AnimTerrainEffect";
 import { ObjectAttackedEvent } from "@/game/event/ObjectAttackedEvent";
+import { SpecialWarheadType } from "@/game/SpecialWarheadType";
 interface GameObject {
     isSpawned: boolean;
     isDisposed: boolean;
@@ -84,6 +85,7 @@ interface GameObjectRules {
     fraidycat: boolean;
     insignificant: boolean;
     typeImmune: boolean;
+    damageSelf?: boolean;
     wall: boolean;
 }
 interface WarheadRules {
@@ -262,7 +264,9 @@ export class Warhead {
         if (this.rules.radiation && (!obj.isUnit() || obj.rules.immuneToRadiation)) {
             return false;
         }
-        if (this.rules.psychicDamage && !obj.isInfantry()) {
+        // 完善模拟层逻辑：psychicDamage applies to units that are not immuneToPsionics
+        // (not infantry-only).
+        if (this.rules.psychicDamage && (!obj.isUnit() || obj.rules.immuneToPsionics)) {
             return false;
         }
         if (obj.isOverlay() && BridgeOverlayTypes.isLowBridgeHead(obj.overlayId!)) {
@@ -281,7 +285,7 @@ export class Warhead {
                 return 0;
             }
         }
-        if (!gameWorld.gameOpts.destroyableBridges && target.isOverlay() && target.isBridge()) {
+        if (!gameWorld.gameOpts.destroyableBridges && target.isOverlay() && (target as any).bridgeTrait) {
             return 0;
         }
         if (!this.rules.radiation && !this.rules.temporal && target.isInfantry()) {
@@ -302,7 +306,7 @@ export class Warhead {
                 }
             }
             if (!(isWeatherStorm && target.isOverlay() && (target.isBridge() || target.rules.wall))) {
-                damage *= this.rules.verses.get(armorType) || 1;
+                damage *= this.rules.verses.get(armorType);
             }
             if (damage > 0 && target.isTechno()) {
                 const techno = target as TechnoObject;
@@ -340,7 +344,7 @@ export class Warhead {
         target.onAttack(gameWorld as any, weaponInfo);
         gameWorld.events.dispatch(new ObjectAttackedEvent(target, weaponInfo, isDirectHit));
         if (target.isTechno() && !this.rules.temporal) {
-            this.suppressOrScatterTarget(target as TechnoObject, gameWorld);
+            this.supressOrScatterTarget(target as TechnoObject, gameWorld);
         }
         if (!healthTrait.health) {
             if (target.isInfantry()) {
@@ -359,13 +363,13 @@ export class Warhead {
         }
         return false;
     }
-    private suppressOrScatterTarget(target: TechnoObject, gameWorld: GameWorld): void {
+    private supressOrScatterTarget(target: TechnoObject, gameWorld: GameWorld): void {
         if (target.rules.fraidycat || (target.isVehicle() && !target.owner.isCombatant() && target.rules.insignificant)) {
             if (!target.unitOrderTrait.hasTasks()) {
                 if (target.isInfantry()) {
                     (target as InfantryObject).isPanicked = true;
                 }
-                target.unitOrderTrait.addTask(new ScatterTask(gameWorld, undefined as any, undefined as any));
+                target.unitOrderTrait.addTask(new ScatterTask(gameWorld));
                 if (target.isInfantry()) {
                     target.unitOrderTrait.addTask(new CallbackTask(() => (target as InfantryObject).isPanicked = false).setCancellable(false));
                 }
@@ -389,19 +393,44 @@ export class Warhead {
             warhead: this
         };
     }
-    detonate(gameWorld: GameWorld, baseDamage: number, centerTile: Position, elevation: number, centerCoords: Vector3, zone: ZoneType, collisionType: CollisionType | undefined, target: {
-        obj?: GameObject;
-        getBridge?(): GameObject;
-    }, weaponInfo: WeaponInfo | undefined, friendly: boolean, areaEffectSmudge: string | undefined, customSpread?: number, isWeatherStorm = false): void {
+    detonate(
+        gameWorld: GameWorld,
+        baseDamage: number,
+        centerTile: Position,
+        elevation: number,
+        centerCoords: Vector3,
+        zone: ZoneType,
+        collisionType: CollisionType | undefined,
+        target: {
+            obj?: GameObject;
+            getBridge(): GameObject | undefined;
+        },
+        weaponInfo: WeaponInfo | undefined,
+        specialWarheadType: SpecialWarheadType = SpecialWarheadType.None,
+        areaEffectSmudge?: string,
+        customSpread?: number,
+        skipAnim = false,
+    ): void {
         const weapon = weaponInfo?.weapon ?? this.createDummyWeaponInfo() as any;
         const sourceObj = weaponInfo?.obj;
         const sourcePlayer = weaponInfo?.player;
+        const isShrapnel = specialWarheadType === SpecialWarheadType.Shrapnel;
+        const isLightningStrike = specialWarheadType === SpecialWarheadType.LightningStrike;
         const cellSpread = customSpread ? customSpread / Coords.LEPTONS_PER_TILE : this.rules.cellSpread;
         const percentAtMax = this.rules.percentAtMax;
         const processedObjects = new Set<GameObject>();
         const objectDistances = new Map<GameObject, number[]>();
         const rangeHelper = new RangeHelper(gameWorld.map.tileOccupation as any);
-        const tileFinder = new RadialTileFinder(gameWorld.map.tiles as any, gameWorld.map.mapBounds as any, centerTile as any, { width: 1, height: 1 }, 0, Math.ceil(cellSpread), () => true);
+        const tileFinder = new RadialTileFinder(
+            gameWorld.map.tiles as any,
+            gameWorld.map.mapBounds as any,
+            centerTile as any,
+            { width: 1, height: 1 },
+            0,
+            Math.ceil(cellSpread),
+            () => true,
+            false,
+        );
         let currentTile: any;
         while ((currentTile = tileFinder.getNextTile())) {
             for (const obj of gameWorld.map.getObjectsOnTile(currentTile)) {
@@ -410,6 +439,8 @@ export class Warhead {
                 if (collisionType === CollisionType.UnderBridge && obj.isUnit() && (obj as UnitObject).onBridge)
                     continue;
                 if (sourceObj && obj.isTechno() && obj.rules.typeImmune && obj.owner === sourcePlayer && obj.name === sourceObj.name)
+                    continue;
+                if (obj === sourceObj && !sourceObj.rules.damageSelf)
                     continue;
                 if (!this.canDamage(obj, currentTile, zone))
                     continue;
@@ -429,9 +460,12 @@ export class Warhead {
                 else {
                     distance = rangeHelper.distance3(obj as any, centerCoords) / Coords.LEPTONS_PER_TILE;
                 }
+                if (cellSpread && obj.isAircraft() && obj.zone === ZoneType.Air) {
+                    distance /= 2;
+                }
                 if (distance < 0.001)
                     distance = 0;
-                if (friendly && obj.isInfantry() && sourcePlayer) {
+                if (isShrapnel && obj.isInfantry() && sourcePlayer) {
                     if (obj.owner === sourcePlayer || gameWorld.alliances.areAllied(obj.owner, sourcePlayer)) {
                         continue;
                     }
@@ -441,7 +475,7 @@ export class Warhead {
                         if (currentTile !== centerTile || !this.rules.wall)
                             continue;
                     }
-                    else if (!friendly && (currentTile !== centerTile || (!obj.isBuilding() && obj !== (target.obj || target.getBridge?.())))) {
+                    else if (!isShrapnel && (currentTile !== centerTile || (!obj.isBuilding() && obj !== (target.obj || target.getBridge())))) {
                         continue;
                     }
                 }
@@ -457,14 +491,18 @@ export class Warhead {
         for (const obj of processedObjects) {
             if (obj.isDestroyed || obj.isCrashing)
                 continue;
-            let damage = this.computeDamage(baseDamage, obj, gameWorld, isWeatherStorm);
+            let damage = this.computeDamage(baseDamage, obj, gameWorld, isLightningStrike);
             if (baseDamage > 0 && !this.rules.affectsAllies && obj.isTechno() && sourcePlayer) {
                 if (gameWorld.alliances.areAllied(obj.owner, sourcePlayer) || obj.owner === sourcePlayer) {
                     damage = 0;
                 }
             }
-            if (!damage)
+            if (!damage) {
+                if (obj.isTechno() && (obj as TechnoObject).invulnerableTrait.isActive()) {
+                    hasInvulnerableHit = true;
+                }
                 continue;
+            }
             for (const distance of objectDistances.get(obj)!) {
                 let finalDamage = damage;
                 if (cellSpread > 0 && Number.isFinite(finalDamage)) {
@@ -513,17 +551,16 @@ export class Warhead {
                     }
                 }
             }
-            if (obj.isTechno() && (obj as TechnoObject).invulnerableTrait.isActive()) {
-                hasInvulnerableHit = true;
-            }
         }
         const radLevel = (weapon as any).rules.radLevel;
         if (radLevel && cellSpread) {
             gameWorld.mapRadiationTrait.createRadSite(centerTile, radLevel, cellSpread + 1);
         }
-        const animation = isWeatherStorm ? undefined :
-            hasInvulnerableHit ? gameWorld.rules.audioVisual.weaponNullifyAnim :
-                this.pickExplodeAnim(baseDamage, directHitTarget, zone, gameWorld, isWeatherStorm);
+        const animation = skipAnim
+            ? undefined
+            : hasInvulnerableHit
+              ? gameWorld.rules.audioVisual.weaponNullifyAnim
+              : this.pickExplodeAnim(baseDamage, directHitTarget, zone, gameWorld, isLightningStrike);
         if (!hasInvulnerableHit && zone === ZoneType.Ground) {
             const terrainEffect = new AnimTerrainEffect();
             if (animation)
@@ -533,12 +570,12 @@ export class Warhead {
             if (animation)
                 terrainEffect.spawnSmudges(animation, centerTile, gameWorld);
         }
-        gameWorld.events.dispatch(new WarheadDetonateEvent(this, centerCoords, animation, isWeatherStorm));
+        gameWorld.events.dispatch(new WarheadDetonateEvent(this, centerCoords, animation, isLightningStrike));
     }
-    private pickExplodeAnim(damage: number, directHitTarget: GameObject | undefined, zone: ZoneType, gameWorld: GameWorld, isWeatherStorm: boolean): string | undefined {
+    private pickExplodeAnim(damage: number, directHitTarget: GameObject | undefined, zone: ZoneType, gameWorld: GameWorld, isLightningStrike: boolean): string | undefined {
         if (!damage)
             return undefined;
-        if (isWeatherStorm) {
+        if (isLightningStrike) {
             return gameWorld.rules.audioVisual.weatherConBoltExplosion;
         }
         if (this.rules.conventional && zone === ZoneType.Water) {

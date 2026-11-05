@@ -1,7 +1,6 @@
 import { ActionType } from '@/game/action/ActionType';
 import { UpdateType } from '@/game/action/UpdateQueueAction';
 import { DebugCommand, DebugCommandType } from '@/game/action/DebugAction';
-import { TargetBridgeMode } from '@/game/Target';
 interface Tile {
     x: number;
     y: number;
@@ -39,7 +38,7 @@ interface Game {
         hasObjectId(id: number): boolean;
     };
     getObjectById(id: number): any;
-    createTarget(object: any, tile: any, bridgeMode?: TargetBridgeMode): Target;
+    createTarget(object: any, tile: any): Target;
 }
 interface LocalPlayer {
     name: string;
@@ -99,30 +98,9 @@ export class ActionsApi {
         });
     }
 
-    private normalizeObjectArgs(objectType: any, subType: any): {
-        objectType: any;
-        subType: any;
-    } {
-        // Compatibility: some third-party bots call queue APIs as (name, type)
-        // while the game API expects (type, name).
-        if (typeof objectType === 'string' && (typeof subType === 'number' || /^\d+$/.test(String(subType)))) {
-            return {
-                objectType: subType,
-                subType: objectType,
-            };
-        }
-        return { objectType, subType };
-    }
-
-    queueForProduction(queueType: any, objectType: any, subType: any, quantity: number): void {
-        const normalized = this.normalizeObjectArgs(objectType, subType);
-        let item: any;
-        try {
-            item = this.game.rules.getObject(normalized.subType, normalized.objectType);
-        } catch (e) {
-            console.error(`[ActionsApi] queueForProduction failed: getObject("${normalized.subType}", ${normalized.objectType}) threw:`, e);
-            return;
-        }
+    // 完善模拟层逻辑：queueForProduction(queueType, name, type, quantity) → getObject(name, type)
+    queueForProduction(queueType: any, name: any, type: any, quantity: number): void {
+        const item = this.game.rules.getObject(name, type);
         this.createAndPushAction(ActionType.UpdateQueue, (action) => {
             action.queueType = queueType;
             action.updateType = UpdateType.Add;
@@ -130,15 +108,8 @@ export class ActionsApi {
             action.quantity = quantity;
         });
     }
-    unqueueFromProduction(queueType: any, objectType: any, subType: any, quantity: number): void {
-        const normalized = this.normalizeObjectArgs(objectType, subType);
-        let item: any;
-        try {
-            item = this.game.rules.getObject(normalized.subType, normalized.objectType);
-        } catch (e) {
-            console.error(`[ActionsApi] unqueueFromProduction failed: getObject("${normalized.subType}", ${normalized.objectType}) threw:`, e);
-            return;
-        }
+    unqueueFromProduction(queueType: any, name: any, type: any, quantity: number): void {
+        const item = this.game.rules.getObject(name, type);
         this.createAndPushAction(ActionType.UpdateQueue, (action) => {
             action.queueType = queueType;
             action.updateType = UpdateType.Cancel;
@@ -164,10 +135,11 @@ export class ActionsApi {
             action.unitIds = unitIds;
         });
         let target: Target | undefined;
-        if (targetX !== undefined) {
+        // 完善模拟层逻辑：tile 0 means "no target" / object-id mode, not a real coord.
+        if (targetX) {
             let targetObject: any;
             let targetTile: any;
-            if (targetY !== undefined) {
+            if (targetY) {
                 targetObject = undefined;
                 const tile = this.game.map.tiles.getByMapCoords(targetX, targetY);
                 if (!tile) {
@@ -185,10 +157,7 @@ export class ActionsApi {
                 targetObject = this.game.getObjectById(targetX);
                 targetTile = targetObject.tile;
             }
-            const bridgeMode = targetY !== undefined && useBridge !== undefined
-                ? (useBridge ? TargetBridgeMode.Bridge : TargetBridgeMode.Ground)
-                : TargetBridgeMode.Auto;
-            target = this.game.createTarget(targetObject, targetTile, bridgeMode);
+            target = this.game.createTarget(targetObject, targetTile);
         }
         this.createAndPushAction(ActionType.OrderUnits, (action) => {
             action.orderType = orderType;

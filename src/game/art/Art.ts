@@ -16,8 +16,8 @@ export class Art {
         this.objectArt = new Map();
         this.parse();
     }
-    hasObject(name: string, type: ObjectType): boolean {
-        return this.objectArt.get(type)?.has(name) ?? false;
+    hasObject(name: string, type: ObjectType): boolean | undefined {
+        return this.objectArt.get(type)?.has(name);
     }
     getObject(name: string, type: ObjectType): ObjectArt {
         if (!name) {

@@ -85,7 +85,7 @@ export class HoverLocomotor {
         else if (this.currentWaypointType === WaypointType.End) {
             const brakeDistance = this.computeBrakeDistance(this.currentSpeed, this.deceleration);
             if (this.totalDistanceToTravel - this.distanceTravelled <= brakeDistance) {
-                this.currentSpeed = Math.max(0, this.currentSpeed - this.deceleration);
+                this.currentSpeed = Math.max(1, this.currentSpeed - this.deceleration);
             }
         }
         else {
@@ -94,14 +94,15 @@ export class HoverLocomotor {
         const currentFacing = FacingUtil.fromMapCoords(direction);
         const targetFacing = FacingUtil.fromMapCoords(this.nextWaypointDir);
         let desiredFacing = currentFacing;
-        const rotationSpeed = unit.rules.rot;
+        let rotationSpeed = unit.rules.rot;
         if (this.currentWaypointType === WaypointType.Normal && currentFacing !== targetFacing) {
             const angleDiff = angleDegBetweenVec2(this.nextWaypointDir, FacingUtil.toMapCoords(unit.direction));
             const turnTime = angleDiff / rotationSpeed;
             const turnDistance = Math.max(this.currentSpeed * turnTime, this.totalDistanceToTravel);
             if (this.totalDistanceToTravel - this.distanceTravelled <= turnDistance) {
                 desiredFacing = targetFacing;
-                const remainingTime = angleDiff /
+                rotationSpeed =
+                    angleDiff /
                     ((this.totalDistanceToTravel - this.distanceTravelled) / this.currentSpeed);
             }
         }

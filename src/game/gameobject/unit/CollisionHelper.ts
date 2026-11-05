@@ -8,7 +8,8 @@ interface TileOccupation {
 }
 interface CollisionOptions {
     walls?: boolean;
-    units?: (owner: any) => boolean;
+    /** 完善模拟层逻辑：false disables unit wall-hits; otherwise a predicate over unit.owner */
+    units?: false | ((owner: any) => boolean);
     shore?: boolean;
     ground?: boolean;
     cliffs?: boolean;

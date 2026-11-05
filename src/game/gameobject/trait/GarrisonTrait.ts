@@ -28,6 +28,7 @@ export class GarrisonTrait {
     [NotifyDestroy.onDestroy](building: Building, context: GameContext, reason: any, isImmediate: boolean): void {
         if (isImmediate) {
             for (const unit of this.units) {
+                unit.deathType = building.deathType;
                 context.destroyObject(unit, reason, true);
             }
             this.units = [];
@@ -67,6 +68,8 @@ export class GarrisonTrait {
                     if (exitTile) {
                         units.splice(unitIndex, 1);
                         context.unlimboObject(unit, exitTile);
+                        unit.onBridge = context.map.tileOccupation.getBridgeOnTile(exitTile)?.isLowBridge() ?? false;
+                        unit.position.tileElevation = 0;
                         unit.unitOrderTrait.addTask(new ScatterTask(context));
                     }
                     else if (!forceDestroy) {

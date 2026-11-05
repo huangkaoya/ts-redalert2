@@ -3,10 +3,10 @@ import { EventType } from "@/game/event/EventType";
 export class BuildObjectTypeCondition extends TriggerCondition {
     private objectType: any;
     private objectIndex: number;
-    constructor(params: any[], trigger: any, objectType: any) {
-        super(params, trigger);
+    constructor(event: any, trigger: any, objectType: any) {
+        super(event, trigger);
         this.objectType = objectType;
-        this.objectIndex = Number(params[1]);
+        this.objectIndex = Number(event.params[1]);
     }
     check(event: any, events: any[]): boolean {
         return events.some((event) => event.type === EventType.ObjectSpawn &&

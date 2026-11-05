@@ -49,32 +49,31 @@ export class ModMeta {
         }
         const website = section.getString("Website");
         if (website) {
-            if (website.match(/^https?:\/\, this.website = website))
-                ;
+            if (website.match(/^https?:\/\//)) {
+                this.website = website;
+            }
+            else {
+                console.warn(`Invalid mod meta website "${website}"`);
+            }
         }
-        else {
-            console.warn(`Invalid mod meta website "${website}"`);
-        }
+        this.version = section.getString("Version") || undefined;
+        this.download = section.getString("Download") || undefined;
+        this.downloadSize = section.getNumber("DownloadSize") || undefined;
+        this.manualDownload = section.getBool("ManualDownload");
+        return this;
     }
-}
-this.version = section.getString("Version") || undefined;
-this.download = section.getString("Download") || undefined;
-this.downloadSize = section.getNumber("DownloadSize") || undefined;
-this.manualDownload = section.getBool("ManualDownload");
-return this;
-clone();
-ModMeta;
-{
-    const cloned = new ModMeta();
-    cloned.id = this.id;
-    cloned.name = this.name;
-    cloned.supported = this.supported;
-    cloned.description = this.description;
-    cloned.authors = this.authors?.slice();
-    cloned.website = this.website;
-    cloned.version = this.version;
-    cloned.download = this.download;
-    cloned.downloadSize = this.downloadSize;
-    cloned.manualDownload = this.manualDownload;
-    return cloned;
+    clone(): ModMeta {
+        const cloned = new ModMeta();
+        cloned.id = this.id;
+        cloned.name = this.name;
+        cloned.supported = this.supported;
+        cloned.description = this.description;
+        cloned.authors = this.authors?.slice();
+        cloned.website = this.website;
+        cloned.version = this.version;
+        cloned.download = this.download;
+        cloned.downloadSize = this.downloadSize;
+        cloned.manualDownload = this.manualDownload;
+        return cloned;
+    }
 }

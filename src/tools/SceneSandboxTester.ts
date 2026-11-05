@@ -30,7 +30,6 @@ import { BuildStatus } from '@/game/gameobject/Building';
 import { Infantry } from '@/game/gameobject/Infantry';
 import { VeteranLevel } from '@/game/gameobject/unit/VeteranLevel';
 import { getZoneType, ZoneType } from '@/game/gameobject/unit/ZoneType';
-import { Target } from '@/game/Target';
 import { RadialTileFinder } from '@/game/map/tileFinder/RadialTileFinder';
 import { MapTileIntersectHelper } from '@/engine/util/MapTileIntersectHelper';
 import { MapPanningHelper } from '@/engine/util/MapPanningHelper';
@@ -661,7 +660,7 @@ export class SceneSandboxTester {
     }
 
     private static isNavalVehicleRules(rules: any): boolean {
-        return Target.usesGroundLayerUnderBridge({ rules });
+        return !!(rules?.naval || rules?.waterBound);
     }
 
     private static isMajorSuperWeaponBuilding(rules: any, buildingName: string): boolean {
@@ -1716,7 +1715,7 @@ export class SceneSandboxTester {
 
     private static getBridgeForUnit(unit: any, tile: any): any | undefined {
         const runtime = this.runtime;
-        if (!runtime || unit.zone === ZoneType.Air || Target.usesGroundLayerUnderBridge(unit)) {
+        if (!runtime || unit.zone === ZoneType.Air) {
             return undefined;
         }
         return runtime.game.map.tileOccupation.getBridgeOnTile(tile);

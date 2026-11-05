@@ -32,7 +32,8 @@ export class SelectionModel {
             : this.selectionLevel & ~SelectionLevel.Selected);
     }
     isHovered(): boolean {
-        return ((this.selectionLevel >> SelectionLevel.Hover) & 1) as any;
+        // 完善模拟层逻辑：bit-mask Hover, not a right-shift of the Hover enum value.
+        return Boolean(this.selectionLevel & SelectionLevel.Hover);
     }
     isSelected(): boolean {
         return this.selectionLevel >= SelectionLevel.Selected;

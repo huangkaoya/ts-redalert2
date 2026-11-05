@@ -13,11 +13,13 @@ export class CheerTask extends Task {
             gameObject.stance = StanceType.None;
             return true;
         }
+        // 完善模拟层逻辑：if the unit cannot cheer, finish the task (return true)
+        // so a non-cancellable CheerTask does not block the order queue forever.
         if (!gameObject.isInfantry() ||
             !gameObject.art.sequences.has(SequenceType.Cheer) ||
             (gameObject.stance !== StanceType.None &&
                 gameObject.stance !== StanceType.Guard)) {
-            return false;
+            return true;
         }
         gameObject.stance = StanceType.Cheer;
         this.children.push(new WaitMinutesTask(1 / 60).setCancellable(false));

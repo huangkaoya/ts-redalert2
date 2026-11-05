@@ -4,7 +4,6 @@ import { RadialTileFinder } from "@/game/map/tileFinder/RadialTileFinder";
 import { MoveTask } from "@/game/gameobject/task/move/MoveTask";
 import { TurnTask } from "@/game/gameobject/task/TurnTask";
 import { WaitMinutesTask } from "@/game/gameobject/task/system/WaitMinutesTask";
-import { TiberiumType } from "@/engine/type/TiberiumType";
 import { HarvesterTrait, HarvesterStatus } from "@/game/gameobject/trait/HarvesterTrait";
 import { TeleportMoveToRefineryTask } from "@/game/gameobject/task/harvester/TeleportMoveToRefineryTask";
 import { GatherOreTask } from "@/game/gameobject/task/harvester/GatherOreTask";
@@ -146,15 +145,18 @@ export class ReturnOreTask extends Task {
         }
         if (harvesterTrait.status !== HarvesterStatus.Unloading)
             return false;
-        const oreValue = harvesterTrait.ore * this.game.rules.getTiberium(TiberiumType.Ore).value +
-            harvesterTrait.gems * this.game.rules.getTiberium(TiberiumType.Gems).value;
-        this.target.owner.credits += oreValue;
+        const baseOreValue = harvesterTrait.getBails().reduce(
+            (sum: number, [type, count]: [any, number]) => sum + count * this.game.rules.getTiberium(type).value,
+            0,
+        );
+        let oreValue = baseOreValue;
         const purifierCount = [...this.target.owner.buildings].filter((building: any) => building.rules.orePurifier &&
             (!building.poweredTrait || !this.target.owner.powerTrait?.isLowPower())).length;
         const purifierBonus = this.game.rules.general.purifierBonus;
-        this.target.owner.credits += purifierCount * Math.floor(oreValue * purifierBonus);
-        harvesterTrait.ore = 0;
-        harvesterTrait.gems = 0;
+        oreValue += purifierCount * Math.floor(baseOreValue * purifierBonus);
+        this.target.owner.credits += oreValue;
+        this.target.owner.creditsGained += oreValue;
+        harvesterTrait.empty();
         if (unit.unitOrderTrait.getTasks().length === 1) {
             unit.unitOrderTrait.addTask(new GatherOreTask(this.game));
         }

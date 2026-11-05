@@ -13,5 +13,5 @@ export function configsAreEqual(config1: TargetLinesConfig | undefined, config2:
             config1?.target === config2?.target);
 }
 export function configHasTarget(config: TargetLinesConfig | undefined): boolean {
-    return !(!config?.pathNodes?.length && !config?.target);
+    return !(!config?.pathNodes.length && !config?.target);
 }

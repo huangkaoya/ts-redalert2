@@ -53,6 +53,7 @@ export class HospitalTrait {
     }
     [NotifyDestroy.onDestroy](hospital: GameObject, world: World, source: any): void {
         if (this.unit) {
+            this.unit.deathType = hospital.deathType;
             world.destroyObject(this.unit, source, true);
             this.unit = undefined;
         }

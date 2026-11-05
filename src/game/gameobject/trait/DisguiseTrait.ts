@@ -58,6 +58,8 @@ export class DisguiseTrait {
                 return generalRules.alliedDisguise;
             case SideType.Nod:
                 return generalRules.sovietDisguise;
+            case SideType.ThirdSide:
+                return generalRules.thirdDisguise;
             default:
                 return undefined;
         }

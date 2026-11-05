@@ -17,9 +17,6 @@ export class ProductionTrait implements NotifyTick, NotifySpawn, NotifyUnspawn, 
     private availableObjectRules: Set<any>;
     private baseBuildSpeed: number;
     constructor(rules: any, speedCheat: any) {
-        if (!speedCheat || !('value' in speedCheat)) {
-            throw new Error('ProductionTrait requires a shared speedCheat BoxedVar');
-        }
         this.rules = rules;
         this.speedCheat = speedCheat;
         this.availableObjectRules = new Set();

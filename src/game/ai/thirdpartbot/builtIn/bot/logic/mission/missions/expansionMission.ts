@@ -100,8 +100,11 @@ export class ExpansionMission extends Mission {
                 .filter((t): t is Tile => !!t)
                 .filter((t) => {
                     try {
+                        // 完善模拟层逻辑：MapApi.findPath(speedType, isFoot, start, end, options).
+                        // MCV is a vehicle, so isFoot is always false.
                         const path = game.mapApi.findPath(
                             selectedMcvUnit.rules.speedType!,
+                            false,
                             toPathNode(selectedMcvUnit.tile, !!selectedMcvUnit.onBridge),
                             toPathNode(t, false),
                             { bestEffort: true, maxExpandedNodes: 1500 },

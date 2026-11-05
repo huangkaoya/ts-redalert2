@@ -9,7 +9,7 @@ import { BoxedVar } from "../util/BoxedVar";
 import { StartingUnitsGenerator } from "./StartingUnitsGenerator";
 import { CardinalTileFinder } from "./map/tileFinder/CardinalTileFinder";
 import { SpeedType } from "./type/SpeedType";
-import { Target, TargetBridgeMode } from "./Target";
+import { Target } from "./Target";
 import { BridgeOverlayTypes } from "./map/BridgeOverlayTypes";
 import { fnv32a, isBetween } from "../util/math";
 import { GameEventBus } from "./GameEventBus";
@@ -27,8 +27,8 @@ import { ObjectUnspawnEvent } from "./event/ObjectUnspawnEvent";
 import { NotifyTargetDestroy } from "./trait/interface/NotifyTargetDestroy";
 import { VeteranLevel } from "./gameobject/unit/VeteranLevel";
 import { ObjectSpawnEvent } from "./event/ObjectSpawnEvent";
-import { OverlayTibType } from "../engine/type/OverlayTibType";
 import { OreOverlayTypes } from "./map/OreOverlayTypes";
+import { rectContainsPoint } from "../util/geometry";
 import { Weapon } from "./Weapon";
 import { GameSpeed } from "./GameSpeed";
 import { DeathType } from "./gameobject/common/DeathType";
@@ -170,13 +170,14 @@ export class Game {
         if (this.rules.mpDialogSettings.alliesAllowed) {
             this.createInitialTeams();
         }
+        this.botManager.init(this);
+        this.triggers.init(this);
     }
     start() {
         this.status = GameStatus.Started;
         this.currentTick = 0;
         this.currentTime = 0;
-        this.botManager.init(this);
-        this.triggers.init(this);
+        this.botManager.onGameStart();
     }
     createInitialTeams() {
         for (let teamId = 0; teamId < this.gameOpts.maxSlots; teamId++) {
@@ -225,6 +226,8 @@ export class Game {
     createInitialMapOverlays(overlays: any[], noHarvesters: boolean) {
         const bridgeSegments = new Map<any, number>();
         const bridgeObjects = new Map<any, any>();
+        const highBridgeHeadTiles = this.map.bridges.findMapHighBridgeHeadTiles();
+        const highBridgeSpecs = this.map.bridges.findBridgeSpecsForHeadTiles([...highBridgeHeadTiles]);
         for (const overlay of overlays) {
             const overlayName = this.rules.getOverlayName(overlay.id);
             if (!this.validateMapObjectRulesAndArt(overlayName, ObjectType.Overlay)) {
@@ -237,6 +240,29 @@ export class Game {
             let tileY = overlay.ry;
             if (overlayObj.isBridge() && overlayObj.isHighBridge()) {
                 overlayObj.position.tileElevation = 4;
+                const matchedSpec = highBridgeSpecs.find((spec: any) => rectContainsPoint({
+                    x: spec.start.rx,
+                    y: spec.start.ry,
+                    ...this.map.bridges.getBridgeSize(spec),
+                }, {
+                    x: tileX,
+                    y: tileY,
+                }));
+                if (matchedSpec) {
+                    const { type, isXBridge, isHigh } = matchedSpec;
+                    if (!isHigh) {
+                        console.warn(`Expected high bridge but found low bridge overlay at location (${tileX},${tileY})`);
+                        overlayObj.dispose();
+                        continue;
+                    }
+                    if (isXBridge !== overlayObj.isXBridge()) {
+                        const correctedId = BridgeOverlayTypes.calculateHighBridgeOverlayId(type, isXBridge);
+                        if (overlayObj.overlayId !== correctedId) {
+                            overlayObj.overlayId = correctedId;
+                            overlayObj.name = this.rules.getOverlayName(correctedId);
+                        }
+                    }
+                }
                 tileX += overlayObj.isXBridge() ? 0 : -1;
                 tileY += overlayObj.isXBridge() ? -1 : 0;
             }
@@ -248,12 +274,14 @@ export class Game {
             }
             if (overlayObj.rules.tiberium) {
                 const tibType = OreOverlayTypes.getOverlayTibType(overlay.id);
-                const newOverlayId = OreSpread.calculateOverlayId(tibType, tile);
-                if (newOverlayId !== undefined && newOverlayId !== overlay.id) {
-                    overlayObj.dispose();
-                    overlayObj = this.createObject(ObjectType.Overlay, this.rules.getOverlayName(newOverlayId));
-                    overlayObj.overlayId = newOverlayId;
-                    overlayObj.value = overlay.value;
+                if (tibType !== undefined) {
+                    const newOverlayId = OreSpread.calculateOverlayId(tibType, tile);
+                    if (newOverlayId !== undefined && newOverlayId !== overlay.id) {
+                        overlayObj.dispose();
+                        overlayObj = this.createObject(ObjectType.Overlay, this.rules.getOverlayName(newOverlayId));
+                        overlayObj.overlayId = newOverlayId;
+                        overlayObj.value = overlay.value;
+                    }
                 }
             }
             if (BridgeOverlayTypes.isLowBridge(overlay.id)) {
@@ -269,11 +297,6 @@ export class Game {
             }
             else {
                 if (overlayObj.isTiberium()) {
-                    const tibType = OreOverlayTypes.getOverlayTibType(overlayObj.overlayId);
-                    if (![OverlayTibType.Ore, OverlayTibType.Gems, OverlayTibType.Vinifera].includes(tibType)) {
-                        console.warn(`Found unsupported TS tiberium overlay ${overlayObj.overlayId} @${tile.rx},${tile.ry}. Skipping.`);
-                        continue;
-                    }
                     if (this.map.getObjectsOnTile(tile).find((obj: any) => obj.isTerrain())) {
                         overlayObj.dispose();
                         continue;
@@ -301,8 +324,10 @@ export class Game {
             }
         }
         const lowBridgeHeadTiles = [...bridgeObjects.keys()].filter((tile: any) => this.map.bridges.getPieceAtTile(tile)?.headType !== BridgeHeadType.None);
-        const highBridgeHeadTiles = this.map.bridges.findMapHighBridgeHeadTiles();
-        const bridgeSpecs = this.map.bridges.findBridgeSpecsForHeadTiles([...lowBridgeHeadTiles, ...highBridgeHeadTiles]);
+        const bridgeSpecs = [
+            ...this.map.bridges.findBridgeSpecsForHeadTiles([...lowBridgeHeadTiles]),
+            ...highBridgeSpecs,
+        ];
         for (const spec of bridgeSpecs) {
             for (const piece of this.map.bridges.findBridgePieces(spec)) {
                 piece.obj.bridgeTrait.bridgeSpec = spec;
@@ -423,6 +448,9 @@ export class Game {
         for (const player of this.playerList.getCombatants()) {
             const startLoc = this.map.startingLocations[player.startLocation];
             const startTile = this.map.tiles.getByMapCoords(startLoc.x, startLoc.y);
+            if (!startTile) {
+                throw new Error(`Invalid player starting position (${startLoc.x},${startLoc.y})`);
+            }
             const mcvName = this.rules.general.baseUnit.find((unitName: string) => {
                 const unit = this.rules.getObject(unitName, ObjectType.Vehicle);
                 return unit.isAvailableTo(player.country) && unit.hasOwner(player.country);
@@ -561,8 +589,8 @@ export class Game {
         const rules = this.rules.getSuperWeapon(name);
         return new SuperWeapon(name, rules, owner, isReady);
     }
-    createTarget(obj: any, tile: any, bridgeMode: TargetBridgeMode = TargetBridgeMode.Auto) {
-        return new Target(obj, tile, this.map.tileOccupation, bridgeMode);
+    createTarget(obj: any, tile: any) {
+        return new Target(obj, tile, this.map.tileOccupation);
     }
     isValidTarget(obj: any): boolean {
         if (obj) {
@@ -662,7 +690,9 @@ export class Game {
         }
         if (obj.isTechno()) {
             const originalOwner = obj.mindControllableTrait?.getOriginalOwner() ?? obj.owner;
-            if (killer && (obj.isBuilding() || originalOwner.isCombatant())) {
+            // 完善模拟层逻辑：score when killer exists and the victim is not a
+            // building owned by a non-combatant (!building || combatant).
+            if (killer && (!obj.isBuilding() || originalOwner.isCombatant())) {
                 killer.player.addUnitsKilled(obj.type, 1);
                 if (killer.player !== originalOwner && !this.alliances.areAllied(killer.player, originalOwner)) {
                     killer.player.score += obj.rules.points;
@@ -794,9 +824,12 @@ export class Game {
     }
     checkGameEndConditions() {
         this.updateDefeatedPlayers(this.playerList.getCombatants());
-        const shouldEnd = (this.localPlayer?.defeated && !this.localPlayer.isObserver) ||
-            (!this.alliances.getHostilePlayers().length &&
-                this.gameOpts.humanPlayers.length + this.gameOpts.aiPlayers.filter((p: any) => !!p).length > 1);
+        const shouldEnd =
+            (this.localPlayer?.defeated && !this.localPlayer.isObserver) ||
+            (!this.alliances.getHostilePlayers().some((pair: any) => !pair.first.isAi || !pair.second.isAi) &&
+                this.gameOpts.humanPlayers.length +
+                    this.gameOpts.aiPlayers.filter((p: any) => !!p).length >
+                    1);
         if (shouldEnd) {
             this.end();
         }
@@ -867,11 +900,14 @@ export class Game {
             }
         });
     }
+    isAssetRedistributionEnabled(): boolean {
+        return this.rules.mpDialogSettings.mustAlly && !this.rules.mpDialogSettings.allyChangeAllowed;
+    }
     redistributeAllPlayerAssets(player: any): boolean {
         if (player.isObserver) {
             return false;
         }
-        if (!(this.rules.mpDialogSettings.mustAlly && !this.rules.mpDialogSettings.allyChangeAllowed)) {
+        if (!this.isAssetRedistributionEnabled()) {
             return false;
         }
         const allies = this.alliances.getAllies(player).filter((p: any) => !p.isAi && !p.defeated);

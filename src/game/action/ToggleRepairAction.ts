@@ -11,14 +11,19 @@ export class ToggleRepairAction extends Action {
         super(ActionType.ToggleRepair);
         this.game = game;
     }
+    static decodePayload(data: Uint8Array): { buildingId: number } {
+        return { buildingId: new DataStream(data).readUint32() };
+    }
+    static encodePayload(payload: { buildingId: number }): Uint8Array {
+        const stream = new DataStream(4);
+        stream.writeUint32(payload.buildingId);
+        return stream.toUint8Array();
+    }
     unserialize(data: Uint8Array): void {
-        this.buildingId = new DataStream(data).readUint32();
+        this.buildingId = ToggleRepairAction.decodePayload(data).buildingId;
     }
     serialize(): Uint8Array {
-        const stream = new DataStream(4);
-        stream.dynamicSize = false;
-        stream.writeUint32(this.buildingId);
-        return stream.toUint8Array();
+        return ToggleRepairAction.encodePayload({ buildingId: this.buildingId });
     }
     print(): string {
         return `Toggle repair ${this.buildingId}`;

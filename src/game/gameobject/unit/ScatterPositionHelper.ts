@@ -73,7 +73,7 @@ export class ScatterPositionHelper {
             }
             if (!occupiedTiles.has(tile)) {
                 let obstacles = map.terrain.findObstacles({ tile, onBridge: foundBridge }, unit);
-                if (ignoredBlockers?.length) {
+                if (ignoredBlockers && ignoredBlockers.length) {
                     obstacles = obstacles.filter(obs => !ignoredBlockers.includes(obs.obj));
                 }
                 if (!obstacles.length)

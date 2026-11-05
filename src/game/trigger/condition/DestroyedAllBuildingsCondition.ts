@@ -3,9 +3,9 @@ import { TriggerCondition } from "@/game/trigger/TriggerCondition";
 export class DestroyedAllBuildingsCondition extends TriggerCondition {
     private allDestroyed: boolean = false;
     private houseId: number;
-    constructor(params: any[], trigger: any) {
-        super(params, trigger);
-        this.houseId = Number(params[1]);
+    constructor(event: any, trigger: any) {
+        super(event, trigger);
+        this.houseId = Number(event.params[1]);
     }
     check(event: any, events: any[]): boolean {
         if (this.allDestroyed) {

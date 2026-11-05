@@ -6,8 +6,10 @@ import { ScatterTask } from './ScatterTask';
 import { Task } from './system/Task';
 import { TurnTask } from './TurnTask';
 import { WaitMinutesTask } from './system/WaitMinutesTask';
+import { WaitTicksTask } from './system/WaitTicksTask';
 import { ZoneType } from '../unit/ZoneType';
 import { CallbackTask } from './system/CallbackTask';
+import { GameSpeed } from '@/game/GameSpeed';
 enum EvacuationState {
     None = 0,
     OnlyPassengers = 1,
@@ -168,8 +170,9 @@ export class EvacuateTransportTask extends Task {
             unit.unitOrderTrait.addTask(new MoveTask(this.game as any, moveNode.tile, !!moveNode.onBridge));
         }
         else {
-            unit.unitOrderTrait.addTask(new ScatterTask(this.game as any, undefined as any, undefined as any));
+            unit.unitOrderTrait.addTask(new ScatterTask(this.game as any));
         }
+        unit.unitOrderTrait.addTask(new WaitTicksTask(2 * GameSpeed.BASE_TICKS_PER_SECOND));
         this.game.events.dispatch(new LeaveTransportEvent(transport));
         return true;
     }
@@ -182,9 +185,10 @@ export class EvacuateTransportTask extends Task {
         const baseDirection = (transport.direction + 180) % 360;
         let fallbackTarget: EvacTarget | undefined;
         for (let angleOffset = 0; angleOffset <= 180; angleOffset += 45) {
+            // 完善模拟层逻辑：when offset is 0 or 180, only try [base+offset] (not ±pairs).
             const directions = angleOffset && angleOffset < 180
                 ? [baseDirection + angleOffset, baseDirection - angleOffset]
-                : [baseDirection];
+                : [baseDirection + angleOffset];
             for (const direction of directions) {
                 const mapCoords = FacingUtil.toMapCoords(direction);
                 let currentTile = transport.tile;

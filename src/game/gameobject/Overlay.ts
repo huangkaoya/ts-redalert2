@@ -2,8 +2,8 @@ import { ObjectType } from '@/engine/type/ObjectType';
 import { GameObject } from '@/game/gameobject/GameObject';
 import { BridgeOverlayTypes } from '@/game/map/BridgeOverlayTypes';
 import { OreOverlayTypes } from '@/game/map/OreOverlayTypes';
-import { OverlayTibType } from '@/engine/type/OverlayTibType';
 import { WallTrait } from '@/game/gameobject/trait/WallTrait';
+import { LandType } from '@/game/type/LandType';
 export class Overlay extends GameObject {
     radarInvisible: boolean;
     wallTrait?: WallTrait;
@@ -20,7 +20,7 @@ export class Overlay extends GameObject {
         this.radarInvisible = this.rules.radarInvisible;
     }
     isTiberium(): boolean {
-        return OreOverlayTypes.getOverlayTibType(this.overlayId) !== OverlayTibType.NotSpecial;
+        return OreOverlayTypes.getOverlayTibType(this.overlayId) !== undefined;
     }
     isBridge(): boolean {
         return BridgeOverlayTypes.isBridge(this.overlayId);
@@ -51,5 +51,15 @@ export class Overlay extends GameObject {
             }
         }
         return foundation;
+    }
+
+    getLandType(): LandType {
+        return this.rules.wall
+            ? LandType.Wall
+            : this.isTiberium()
+              ? LandType.Tiberium
+              : this.isBridge() && this.isHighBridge()
+                ? LandType.Road
+                : this.rules.land;
     }
 }

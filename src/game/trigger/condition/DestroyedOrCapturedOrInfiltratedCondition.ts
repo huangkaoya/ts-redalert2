@@ -3,7 +3,8 @@ import { TriggerCondition } from "@/game/trigger/TriggerCondition";
 export class DestroyedOrCapturedOrInfiltratedCondition extends TriggerCondition {
     private eventsFilter: EventType[];
     constructor(event?: any, trigger?: any) {
-        super(event ?? null, trigger ?? null);
+        // 完善模拟层逻辑：pass through without nullish coercion.
+        super(event, trigger);
         this.eventsFilter = [
             EventType.ObjectDestroy,
             EventType.ObjectOwnerChange,

@@ -27,7 +27,7 @@ export class ScatterOrder extends Order {
         return [
             new ScatterTask(this.game, {
                 tile: this.target.tile,
-                toBridge: !!this.target.getBridgeFor(this.sourceObject),
+                toBridge: !!this.target.getBridge(),
             }, undefined),
         ];
     }

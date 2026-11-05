@@ -23,7 +23,7 @@ export class CaptureOrder extends Order {
         if (this.game.gameOpts.multiEngineer) {
             const generalRules = this.game.rules.general;
             const targetObj = this.target.obj;
-            if ((!targetObj.owner.isNeutral || !generalRules.engineerAlwaysCaptureTech) &&
+            if ((!targetObj.rules.needsEngineer || !generalRules.engineerAlwaysCaptureTech) &&
                 targetObj.healthTrait.health > 100 * generalRules.engineerCaptureLevel) {
                 return PointerType.EngineerDamage;
             }
@@ -36,6 +36,7 @@ export class CaptureOrder extends Order {
             !this.sourceObject.isInfantry()) &&
             this.target.obj.rules.capturable &&
             this.sourceObject.rules.engineer &&
+            !this.target.obj.secureProgressTrait?.isActiveFrom(this.sourceObject.owner) &&
             !this.game.areFriendly(this.sourceObject, this.target.obj));
     }
     isAllowed(): boolean {

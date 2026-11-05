@@ -37,12 +37,14 @@ export class TechnoRules extends ObjectRules {
     declare forbiddenHouses: string[];
     declare requiresStolenAlliedTech: boolean;
     declare requiresStolenSovietTech: boolean;
+    declare requiresStolenThirdTech: boolean;
     declare techLevel: number;
     declare cost: number;
     declare points: number;
     declare power: number;
     declare powered: boolean;
     declare prerequisite: string[];
+    declare prerequisiteOverride: string[];
     declare soylent: number;
     declare crateGoodie: boolean;
     declare buildCat: BuildCat;
@@ -133,6 +135,7 @@ export class TechnoRules extends ObjectRules {
     declare immuneToRadiation: boolean;
     declare immuneToPsionics: boolean;
     declare typeImmune: boolean;
+    declare damageSelf: boolean;
     declare warpable: boolean;
     declare isTilter: boolean;
     declare walkRate: number;
@@ -296,12 +299,14 @@ export class TechnoRules extends ObjectRules {
         this.forbiddenHouses = this.ini.getArray("ForbiddenHouses");
         this.requiresStolenAlliedTech = this.ini.getBool("RequiresStolenAlliedTech");
         this.requiresStolenSovietTech = this.ini.getBool("RequiresStolenSovietTech");
+        this.requiresStolenThirdTech = this.ini.getBool("RequiresStolenThirdTech");
         this.techLevel = this.ini.getNumber("TechLevel", -1);
         this.cost = this.ini.getNumber("Cost");
         this.points = this.ini.getNumber("Points");
         this.power = this.ini.getNumber("Power");
         this.powered = this.ini.getBool("Powered");
         this.prerequisite = this.ini.getArray("Prerequisite");
+        this.prerequisiteOverride = this.ini.getArray("PrerequisiteOverride");
         this.soylent = this.ini.getNumber("Soylent");
         this.crateGoodie = this.ini.getBool("CrateGoodie");
         this.buildCat = this.ini.getEnum("BuildCat", BuildCat, BuildCat.Combat);
@@ -402,6 +407,7 @@ export class TechnoRules extends ObjectRules {
         this.immuneToRadiation = this.ini.getBool("ImmuneToRadiation");
         this.immuneToPsionics = this.ini.getBool("ImmuneToPsionics");
         this.typeImmune = this.ini.getBool("TypeImmune");
+        this.damageSelf = this.ini.getBool("DamageSelf");
         this.warpable = this.ini.getBool("Warpable", true);
         this.isTilter = this.ini.getBool("IsTilter", true);
         this.walkRate = this.ini.getNumber("WalkRate", 1);
@@ -421,7 +427,7 @@ export class TechnoRules extends ObjectRules {
         const locomotorString = this.ini.getString("Locomotor");
         let defaultLocomotor = this.type === ObjectType.Building ? LocomotorType.Statue : LocomotorType.Chrono;
         if (locomotorString) {
-            const locomotorType = (LocomotorType as any).locomotorTypesByClsId?.get(locomotorString);
+            const locomotorType = (LocomotorType as any).locomotorTypesByClsId.get(locomotorString);
             if (locomotorType) {
                 this.locomotor = locomotorType;
             }
@@ -434,7 +440,7 @@ export class TechnoRules extends ObjectRules {
             this.locomotor = defaultLocomotor;
         }
         if (this.locomotor !== LocomotorType.Statue) {
-            let defaultSpeed = (LocomotorType as any).defaultSpeedsByLocomotor?.get(this.locomotor);
+            let defaultSpeed = (LocomotorType as any).defaultSpeedsByLocomotor.get(this.locomotor);
             if (void 0 === defaultSpeed) {
                 if (this.type === ObjectType.Aircraft || this.consideredAircraft) {
                     defaultSpeed = SpeedType.Winged;

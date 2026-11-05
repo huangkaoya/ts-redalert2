@@ -31,13 +31,16 @@ export class MoveOrder extends Order {
     }
     getPointerType(isMini: boolean): PointerType {
         let canMove = this.isAllowed();
-        if (!canMove ||
-            this.forceMove ||
-            this.sourceObject.isBuilding() ||
-            this.game.mapShroudTrait
-                .getPlayerShroud(this.sourceObject.owner)
-                ?.isShrouded(this.target.tile, this.target.obj?.tileElevation)) {
-            const hasBridge = !!this.target.getBridgeFor(this.sourceObject);
+        const isShrouded = !!this.game.mapShroudTrait
+            .getPlayerShroud(this.sourceObject.owner)
+            ?.isShrouded(this.target.tile, this.target.obj?.tileElevation);
+        // 完善模拟层逻辑：only recompute passability when allowed, not force-move,
+        // not a building order, and not shrouded. Otherwise keep isAllowed().
+        if (canMove &&
+            !this.forceMove &&
+            !this.sourceObject.isBuilding() &&
+            !isShrouded) {
+            const hasBridge = !!this.target.getBridge();
             const speedType = this.sourceObject.rules.speedType;
             const isInfantry = this.sourceObject.isInfantry();
             const isFlying = this.sourceObject.rules.movementZone === MovementZone.Fly;
@@ -125,7 +128,7 @@ export class MoveOrder extends Order {
         if (sourceObject.isBuilding() && sourceObject.rules.undeploysInto) {
             return [
                 new UndeployIntoTask(this.game),
-                new MoveTask(this.game, this.target.tile, !!this.target.getBridgeFor(this.sourceObject), { closeEnoughTiles, forceMove: this.forceMove })
+                new MoveTask(this.game, this.target.tile, !!this.target.getBridge(), { closeEnoughTiles, forceMove: this.forceMove })
             ];
         }
         if (sourceObject.isUnit()) {
@@ -136,7 +139,7 @@ export class MoveOrder extends Order {
                 return [new MoveTargetTask(this.game, this.target.obj)];
             }
             return [
-                new MoveTask(this.game, this.target.tile, !!this.target.getBridgeFor(this.sourceObject), { closeEnoughTiles, forceMove: this.forceMove })
+                new MoveTask(this.game, this.target.tile, !!this.target.getBridge(), { closeEnoughTiles, forceMove: this.forceMove })
             ];
         }
         return undefined;
@@ -182,7 +185,7 @@ export class MoveOrder extends Order {
             const existingMoveTask = tasks.find((task: any) => task.constructor === MoveTask && !task.isCancelling());
             if (existingMoveTask) {
                 existingMoveTask.setForceMove(this.forceMove);
-                existingMoveTask.updateTarget(this.target.tile, !!this.target.getBridgeFor(this.sourceObject));
+                existingMoveTask.updateTarget(this.target.tile, !!this.target.getBridge(), true);
                 if (existingMoveTask.children.length &&
                     existingMoveTask.children[0] instanceof AttackTask) {
                     existingMoveTask.children[0].cancel();
@@ -196,7 +199,8 @@ export class MoveOrder extends Order {
                 const attackTask = tasks.find((task: any) => [AttackTask, AttackMoveTask, AttackMoveTargetTask]
                     .includes(task.constructor) && !task.isCancelling());
                 if (attackTask && attackTask.forceCancel(this.sourceObject)) {
-                    tasks.splice(tasks.indexOf(attackTask), 1);
+                    // 完善模拟层逻辑：splice(index) drops the cancelled task and everything after it.
+                    tasks.splice(tasks.indexOf(attackTask));
                 }
             }
         }

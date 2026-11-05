@@ -58,6 +58,7 @@ interface NodeData {
     tile: Tile;
     onBridge?: Bridge;
     islandId?: number;
+    forceLandSpeed?: number;
 }
 interface PathOptions {
     maxExpandedNodes?: number;
@@ -101,25 +102,40 @@ function calculateHeuristic(nodeA: GraphNode<NodeData>, nodeB: GraphNode<NodeDat
 export class Terrain {
     private passabilityGraphs = new Map<string, Graph<NodeData>>();
     private invalidatedTiles = new Map<string, Set<Tile>>();
+    private tiberiumMayChangePassability = new Set<LandType>();
     constructor(private tiles: TileCollection, private theaterType: any, private mapBounds: MapBounds, private tileOccupation: TileOccupation, private rules: Rules) {
         this.tileOccupation.onChange.subscribe(this.handleTileOccupationUpdate);
         this.mapBounds.onLocalResize.subscribe(this.handleMapBoundsResize);
+        this.tiberiumMayChangePassability.clear();
+        const tiberiumLandRules = this.rules.getLandRules(LandType.Tiberium);
+        for (const speedType of Object.values(SpeedType).filter((v): v is SpeedType => typeof v !== "string")) {
+            const tiberiumPassable = Boolean(Math.sign(tiberiumLandRules.getSpeedModifier(speedType)));
+            for (const landType of Object.values(LandType).filter((v): v is LandType => typeof v !== "string")) {
+                if (Boolean(Math.sign(this.rules.getLandRules(landType).getSpeedModifier(speedType))) !== tiberiumPassable) {
+                    this.tiberiumMayChangePassability.add(landType);
+                }
+            }
+        }
     }
     private handleTileOccupationUpdate = ({ tiles, object }: {
         tiles: Tile[];
         object: GameObject;
     }) => {
         const relevantTiles = tiles.filter(tile => {
-            let speedType = SpeedType.Foot;
-            let isInfantry = true;
-            if (object.isTerrain() &&
-                object.rules.getOccupationBits(this.theaterType) !== OccupationBits.All) {
-                speedType = SpeedType.Wheel;
-                isInfantry = false;
+            if (object.isOverlay()) {
+                if (object.isBridge()) {
+                    return true;
+                }
+                if (object.isTiberium()) {
+                    const baseLandType = getLandType(tile.terrainType);
+                    if (this.tiberiumMayChangePassability.has(baseLandType)) {
+                        return true;
+                    }
+                }
             }
-            return (object.isOverlay() && (object.isBridge() || object.isTiberium())) ||
-                this.isBlockerObject(object, tile, false, speedType, isInfantry) ||
-                this.isBlockerObject(object, tile, true, speedType, isInfantry) ||
+            const speedType = SpeedType.Foot;
+            const isInfantry = !object.isTerrain();
+            return this.isBlockerObject(object, tile, false, speedType, isInfantry) ||
                 (object.isBuilding() && object.rules.leaveRubble);
         });
         if (relevantTiles.length) {
@@ -129,8 +145,8 @@ export class Terrain {
     private handleMapBoundsResize = () => {
         this.passabilityGraphs.clear();
     };
-    private getGraphKey(speedType: SpeedType, onBridge: boolean): string {
-        return speedType + "_" + Number(onBridge);
+    private getGraphKey(speedType: SpeedType, isInfantry: boolean): string {
+        return speedType + '_' + Number(isInfantry);
     }
     private invalidateTiles(tiles: Tile[]): void {
         if (!tiles.length)
@@ -145,23 +161,20 @@ export class Terrain {
             }
         });
     }
-    computePath(speedType: SpeedType, onBridge: boolean, startTile: Tile, startOnBridge: boolean, endTile: Tile, endOnBridge: boolean, options: PathOptions = {}): PathNode[] {
-        const { maxExpandedNodes = Number.POSITIVE_INFINITY, bestEffort = true, excludeTiles, ignoredBlockers = [] } = options;
-        const graph = this.computePassabilityGraph(speedType, onBridge);
+    computePath(speedType: SpeedType, isInfantry: boolean, startTile: Tile, startOnBridge: boolean, endTile: Tile, endOnBridge: boolean, options: PathOptions = {}): PathNode[] {
+        let { maxExpandedNodes = Number.POSITIVE_INFINITY, bestEffort = true, excludeTiles, ignoredBlockers = [] } = options;
+        const graph = this.computePassabilityGraph(speedType, isInfantry);
         const ignoredTiles = ignoredBlockers
             .map(blocker => this.tileOccupation.calculateTilesForGameObject(blocker.tile, blocker))
             .reduce((acc, tiles) => acc.concat(tiles), []);
         if (ignoredTiles.length) {
-            this.updatePassability(ignoredTiles, speedType, onBridge, graph, ignoredBlockers);
+            this.updatePassability(ignoredTiles, speedType, isInfantry, graph, ignoredBlockers);
         }
         const startNodeId = this.getNodeId(startTile, startOnBridge);
         const hasStartNode = graph.hasNode(startNodeId);
         if (!hasStartNode) {
-            graph.addNode(startNodeId, {
-                tile: startTile,
-                onBridge: this.tileOccupation.getBridgeOnTile(startTile)
-            });
-            this.updatePassability([startTile], speedType, onBridge, graph, ignoredBlockers, 1);
+            // 完善模拟层逻辑：force-land-speed=1 via updatePassability; do not pre-add the node.
+            this.updatePassability([startTile], speedType, isInfantry, graph, ignoredBlockers, 1);
         }
         const endNodeId = this.getNodeId(endTile, endOnBridge);
         const hasEndNode = graph.hasNode(endNodeId);
@@ -170,12 +183,13 @@ export class Terrain {
         const useIslandCheck = hasStartNode && !ignoredTiles.length;
         let islandChecker: ((tile: Tile, onBridge: boolean) => boolean) | undefined;
         if (useIslandCheck) {
-            const islandIdMap = this.getIslandIdMap(speedType, onBridge);
+            const islandIdMap = this.getIslandIdMap(speedType, isInfantry);
             const startIslandId = islandIdMap.get(startTile, startOnBridge);
             islandChecker = (tile, onBridge) => islandIdMap.get(tile, onBridge) === startIslandId;
         }
         else {
-            islandChecker = (tile, onBridge) => this.getPassableSpeed(tile, speedType, onBridge, onBridge, ignoredBlockers) > 0;
+            islandChecker = (tile, bridgeLevel) =>
+                this.getPassableSpeed(tile, speedType, isInfantry, bridgeLevel, ignoredBlockers) > 0;
         }
         if (!hasEndNode || !islandChecker(endTile, endOnBridge)) {
             const fallbackTile = bestEffort ?
@@ -189,12 +203,12 @@ export class Terrain {
             else {
                 if (useIslandCheck) {
                     if (ignoredTiles.length) {
-                        this.updatePassability(ignoredTiles, speedType, onBridge, graph);
+                        this.updatePassability(ignoredTiles, speedType, isInfantry, graph);
                     }
                     return [];
                 }
                 graph.addNode(endNodeId, { tile: endTile, onBridge: undefined });
-                Math.min(maxExpandedNodes, 500);
+                maxExpandedNodes = Math.min(maxExpandedNodes, 500);
             }
         }
         const pathFinder = new PathFinder(graph, {
@@ -218,13 +232,13 @@ export class Terrain {
         }
         if (!hasStartNode) {
             graph.removeNode(startNodeId);
-            this.updatePassability([startTile], speedType, onBridge, graph);
+            this.updatePassability([startTile], speedType, isInfantry, graph);
         }
         if (!hasEndNode) {
             graph.removeNode(endNodeId);
         }
         if (ignoredTiles.length) {
-            this.updatePassability(ignoredTiles, speedType, onBridge, graph);
+            this.updatePassability(ignoredTiles, speedType, isInfantry, graph);
         }
         return path;
     }
@@ -237,13 +251,13 @@ export class Terrain {
             }
         });
     }
-    private computePassabilityGraph(speedType: SpeedType, onBridge: boolean): Graph<NodeData> {
-        const graphKey = this.getGraphKey(speedType, onBridge);
+    computePassabilityGraph(speedType: SpeedType, isInfantry: boolean): Graph<NodeData> {
+        const graphKey = this.getGraphKey(speedType, isInfantry);
         let graph = this.passabilityGraphs.get(graphKey);
         if (graph) {
             const invalidatedSet = this.invalidatedTiles.get(graphKey);
             if (invalidatedSet?.size) {
-                this.updatePassability([...invalidatedSet], speedType, onBridge, graph);
+                this.updatePassability([...invalidatedSet], speedType, isInfantry, graph);
                 invalidatedSet.clear();
                 this.computeIslandIds(graph);
             }
@@ -252,13 +266,13 @@ export class Terrain {
             graph = new Graph<NodeData>();
             this.passabilityGraphs.set(graphKey, graph);
             this.tiles.forEach(tile => {
-                this.computePassability(tile, speedType, onBridge, graph);
+                this.computePassability(tile, speedType, isInfantry, graph);
             });
             this.computeIslandIds(graph);
         }
         return graph;
     }
-    private updatePassability(tiles: Tile[], speedType: SpeedType, onBridge: boolean, graph: Graph<NodeData>, ignoredBlockers: GameObject[] = [], forcePassable?: number): void {
+    private updatePassability(tiles: Tile[], speedType: SpeedType, isInfantry: boolean, graph: Graph<NodeData>, ignoredBlockers: GameObject[] = [], forceLandSpeed?: number): void {
         const affectedTiles = new Set<Tile>();
         tiles.forEach(tile => {
             [
@@ -285,7 +299,14 @@ export class Terrain {
             }
         });
         affectedTiles.forEach(tile => {
-            this.computePassability(tile, speedType, onBridge, graph, ignoredBlockers, forcePassable && tiles.includes(tile) ? forcePassable : undefined);
+            this.computePassability(
+                tile,
+                speedType,
+                isInfantry,
+                graph,
+                ignoredBlockers,
+                forceLandSpeed && tiles.includes(tile) ? forceLandSpeed : undefined,
+            );
         });
         savedIslandIds.forEach((islandId, nodeId) => {
             const node = graph.getNode(nodeId);
@@ -294,60 +315,89 @@ export class Terrain {
             }
         });
     }
-    private computePassability(tile: Tile, speedType: SpeedType, onBridge: boolean, graph: Graph<NodeData>, ignoredBlockers: GameObject[] = [], forcePassable?: number): void {
+    private computePassability(
+        tile: Tile,
+        speedType: SpeedType,
+        isInfantry: boolean,
+        graph: Graph<NodeData>,
+        ignoredBlockers: GameObject[] = [],
+        forceLandSpeed?: number,
+    ): void {
         const directions = [
             TileDirection.Left,
             TileDirection.TopLeft,
             TileDirection.Top,
-            TileDirection.TopRight
+            TileDirection.TopRight,
         ];
-        if (forcePassable || this.getPassableSpeed(tile, speedType, onBridge, false, ignoredBlockers)) {
+        if (forceLandSpeed || this.getPassableSpeed(tile, speedType, isInfantry, false, ignoredBlockers)) {
             const nodeId = this.getNodeId(tile, false);
             if (!graph.hasNode(nodeId)) {
-                graph.addNode(nodeId, { tile, onBridge: undefined });
+                graph.addNode(nodeId, { tile, onBridge: undefined, forceLandSpeed });
             }
             for (const direction of directions) {
-                this.connectTiles(tile, undefined, direction, speedType, onBridge, graph, ignoredBlockers);
+                this.connectTiles(tile, undefined, direction, speedType, isInfantry, graph, ignoredBlockers);
             }
         }
         const bridge = this.tileOccupation.getBridgeOnTile(tile);
-        if (bridge && (forcePassable || this.getPassableSpeed(tile, speedType, onBridge, true, ignoredBlockers))) {
+        if (bridge && (forceLandSpeed || this.getPassableSpeed(tile, speedType, isInfantry, true, ignoredBlockers))) {
             const nodeId = this.getNodeId(tile, true);
             if (!graph.hasNode(nodeId)) {
-                graph.addNode(nodeId, { tile, onBridge: bridge });
+                graph.addNode(nodeId, { tile, onBridge: bridge, forceLandSpeed });
             }
             for (const direction of directions) {
-                this.connectTiles(tile, bridge, direction, speedType, onBridge, graph, ignoredBlockers);
+                this.connectTiles(tile, bridge, direction, speedType, isInfantry, graph, ignoredBlockers);
             }
         }
     }
-    private connectTiles(tile: Tile, bridge: Bridge | undefined, direction: TileDirection, speedType: SpeedType, onBridge: boolean, graph: Graph<NodeData>, ignoredBlockers: GameObject[] = []): void {
+
+    private connectTiles(
+        tile: Tile,
+        bridge: Bridge | undefined,
+        direction: TileDirection,
+        speedType: SpeedType,
+        isInfantry: boolean,
+        graph: Graph<NodeData>,
+        ignoredBlockers: GameObject[] = [],
+    ): void {
         const neighborTile = this.tiles.getNeighbourTile(tile, direction);
-        if (!neighborTile)
+        if (!neighborTile) {
             return;
+        }
         let neighborBridge = this.tileOccupation.getBridgeOnTile(neighborTile);
-        const maxElevationDiff = (bridge || neighborBridge) ? 0 : 1;
-        const elevationDiff = Math.abs(tile.z + (bridge?.tileElevation ?? 0) -
-            (neighborTile.z + (neighborBridge?.tileElevation ?? 0)));
+        const maxElevationDiff = bridge || neighborBridge ? 0 : 1;
+        const elevationDiff = Math.abs(
+            tile.z + (bridge?.tileElevation ?? 0) - (neighborTile.z + (neighborBridge?.tileElevation ?? 0)),
+        );
         if (elevationDiff > maxElevationDiff) {
-            if ((!neighborBridge?.isHighBridge() && !bridge?.isHighBridge()) ||
+            if (
+                (!neighborBridge?.isHighBridge() && !bridge?.isHighBridge()) ||
                 Math.abs(tile.z - neighborTile.z) !== 0 ||
-                !graph.hasNode(this.getNodeId(tile, false))) {
+                !graph.hasNode(this.getNodeId(tile, false))
+            ) {
                 return;
             }
             bridge = neighborBridge = undefined;
         }
-        if (!this.getPassableSpeed(neighborTile, speedType, onBridge, !!neighborBridge, ignoredBlockers)) {
+        const neighborNodeId = this.getNodeId(neighborTile, !!neighborBridge);
+        let neighborNode = graph.getNode(neighborNodeId);
+        if (
+            !this.getPassableSpeed(
+                neighborTile,
+                speedType,
+                isInfantry,
+                !!neighborBridge,
+                ignoredBlockers,
+                undefined,
+                neighborNode?.data.forceLandSpeed,
+            )
+        ) {
             return;
         }
-        const neighborNodeId = this.getNodeId(neighborTile, !!neighborBridge);
-        const neighborNode = graph.getNode(neighborNodeId) ??
+        neighborNode =
+            neighborNode ??
             graph.addNode(neighborNodeId, { tile: neighborTile, onBridge: neighborBridge });
-        const currentNodeId = this.getNodeId(tile, !!bridge);
-        const currentNode = graph.getNode(currentNodeId);
-        if (currentNode) {
-            currentNode.addLink(neighborNode);
-        }
+        const currentNode = graph.getNode(this.getNodeId(tile, !!bridge));
+        currentNode.addLink(neighborNode);
     }
     private getNodeId(tile: Tile, onBridge: boolean): string {
         return tile.id + (onBridge ? "_bridge" : "");
@@ -375,82 +425,105 @@ export class Terrain {
             }
         }
     }
-    private getIslandIdMap(speedType: SpeedType, onBridge: boolean) {
-        const graph = this.computePassabilityGraph(speedType, onBridge);
+    getIslandIdMap(speedType: SpeedType, isInfantry: boolean) {
+        const graph = this.computePassabilityGraph(speedType, isInfantry);
         return {
             get: (tile: Tile, onBridge: boolean): number | undefined => {
                 const nodeId = this.getNodeId(tile, onBridge);
                 return graph.getNode(nodeId)?.data.islandId;
-            }
+            },
         };
     }
-    public getPassableSpeed(tile: Tile, speedType: SpeedType, onBridge: boolean, bridgeLevel: boolean, ignoredBlockers: GameObject[] = [], skipBlockerCheck = false): number {
-        if (!this.mapBounds.isWithinBounds(tile))
+    public getPassableSpeed(
+        tile: Tile,
+        speedType: SpeedType,
+        isInfantry: boolean,
+        bridgeLevel: boolean,
+        ignoredBlockers: GameObject[] = [],
+        skipBlockerCheck = false,
+        forceLandSpeed?: number,
+    ): number {
+        if (!this.mapBounds.isWithinBounds(tile)) {
             return 0;
+        }
         let landType = bridgeLevel ? tile.onBridgeLandType : tile.landType;
-        if (landType === undefined)
+        if (landType === undefined) {
             return 0;
+        }
         if (landType === LandType.Wall && speedType === SpeedType.Track) {
             landType = getLandType(tile.terrainType);
         }
         const landRules = this.rules.getLandRules(landType);
-        const speedModifier = landRules.getSpeedModifier(speedType);
-        if (!speedModifier)
+        const speedModifier = forceLandSpeed || landRules.getSpeedModifier(speedType);
+        if (!speedModifier) {
             return 0;
+        }
         if (!skipBlockerCheck) {
             for (const obj of this.tileOccupation.getObjectsOnTile(tile)) {
-                if (this.isBlockerObject(obj, tile, bridgeLevel, speedType, onBridge) &&
-                    !ignoredBlockers.includes(obj)) {
+                if (
+                    this.isBlockerObject(obj, tile, bridgeLevel, speedType, isInfantry) &&
+                    !ignoredBlockers.includes(obj)
+                ) {
                     return 0;
                 }
             }
         }
         return speedModifier;
     }
-    private isBlockerObject(obj: GameObject, tile: Tile, bridgeLevel: boolean, speedType: SpeedType, isInfantry: boolean): boolean {
-        if (obj.isTerrain() && isInfantry &&
-            obj.rules.getOccupationBits(this.theaterType) !== OccupationBits.All) {
+
+    private isBlockerObject(
+        obj: GameObject,
+        tile: Tile,
+        bridgeLevel: boolean,
+        speedType: SpeedType,
+        isInfantry: boolean,
+    ): boolean {
+        if (obj.rules.crushable && [SpeedType.Track, SpeedType.Hover].includes(speedType)) {
             return false;
         }
+        if (obj.isTerrain()) {
+            return (
+                !isInfantry ||
+                obj.rules.getOccupationBits(this.theaterType) === OccupationBits.All
+            );
+        }
         if (obj.isBuilding()) {
-            if (obj.rules.invisibleInGame)
+            if (obj.rules.invisibleInGame) {
                 return false;
-            if (obj.isDestroyed && obj.rules.leaveRubble)
+            }
+            if (obj.isDestroyed && obj.rules.leaveRubble) {
                 return false;
-            if (obj.rules.gate)
+            }
+            if (obj.rules.gate) {
                 return false;
+            }
             const foundation = obj.art.foundation;
             let impassableRows = obj.rules.numberImpassableRows;
             if (isInfantry) {
                 impassableRows = foundation.width;
-            }
-            else if (obj.rules.weaponsFactory && !impassableRows) {
+            } else if (obj.rules.weaponsFactory && !impassableRows) {
                 impassableRows = foundation.width - 1;
             }
             const rect = {
                 x: obj.tile.rx,
                 y: obj.tile.ry,
                 width: (impassableRows || foundation.width) - 1,
-                height: foundation.height - 1
+                height: foundation.height - 1,
             };
             return rectContainsPoint(rect, { x: tile.rx, y: tile.ry });
         }
-        if (obj.isAircraft() || obj.isInfantry() || obj.isVehicle() || obj.isSmudge()) {
-            return false;
-        }
-        if (obj.isOverlay()) {
-            if ((bridgeLevel && obj.isBridge()) ||
-                (!bridgeLevel && obj.isHighBridge()) ||
-                obj.isTiberium() ||
-                obj.rules.crate ||
-                obj.isBridgePlaceholder()) {
-                return false;
-            }
-        }
-        if ([SpeedType.Track, SpeedType.Hover].includes(speedType) && obj.rules.crushable) {
-            return false;
-        }
-        return true;
+        return !(
+            obj.isAircraft() ||
+            obj.isInfantry() ||
+            obj.isVehicle() ||
+            obj.isSmudge() ||
+            (obj.isOverlay() &&
+                ((bridgeLevel && obj.isBridge()) ||
+                    (!bridgeLevel && obj.isHighBridge()) ||
+                    obj.isTiberium() ||
+                    obj.rules.crate ||
+                    obj.isBridgePlaceholder()))
+        );
     }
     findObstacles(pathNode: PathNode, unit: GameObject): Obstacle[] {
         const speedType = unit.rules.speedType;

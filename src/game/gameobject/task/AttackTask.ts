@@ -251,10 +251,12 @@ export class AttackTask extends Task {
         }
         let targetObj = this.target.obj;
         const moveTask = this.children.find((task) => task instanceof MoveInWeaponRangeTask) as MoveInWeaponRangeTask | undefined;
+        // 完善模拟层逻辑：keep-alive: when launching missiles, do not cancel move / end task.
         if (this.isCancelling() && attackTrait.attackState !== AttackState.FireUp) {
-            if (!obj.airSpawnTrait?.isLaunchingMissiles()) {
-                moveTask?.cancel();
+            if (obj.airSpawnTrait?.isLaunchingMissiles()) {
+                return false;
             }
+            moveTask?.cancel();
             return true;
         }
         let justFiredUp = false;
@@ -333,11 +335,27 @@ export class AttackTask extends Task {
                 return true;
             }
             let forcedMove = false;
-            if (this.weapon.rules.limboLaunch && moveTask) {
-                if (!moveTask.forceCancel(obj))
-                    return false;
-                obj.moveTrait.lastTargetOffset = undefined;
-                obj.moveTrait.lastVelocity = undefined;
+            if (this.weapon.rules.limboLaunch) {
+                let limboMoveTask: MoveTask | undefined = moveTask;
+                if (!limboMoveTask) {
+                    const currentTask = obj.unitOrderTrait.getCurrentTask();
+                    if (currentTask && currentTask !== this && attackTrait.getOpportunityFireTask() === this) {
+                        if (!(currentTask instanceof MoveTask)) {
+                            currentTask.cancel();
+                            return false;
+                        }
+                        limboMoveTask = currentTask as MoveTask;
+                    }
+                }
+                if (limboMoveTask) {
+                    if (!limboMoveTask.forceCancel(obj)) {
+                        return false;
+                    }
+                    obj.moveTrait.lastTargetOffset = undefined;
+                    obj.moveTrait.lastVelocity = undefined;
+                }
+                // 完善模拟层逻辑：limboLaunch always finishes the attack after fire,
+                // even when there was no move child to force-cancel.
                 forcedMove = true;
             }
             this.weapon.fire(this.target, this.game, damageMultiplier);
@@ -422,9 +440,7 @@ export class AttackTask extends Task {
                 : this.target.tile;
             const targetTile = this.target.obj
                 ? isValidTarget
-                    ? this.target.obj.isBuilding()
-                        ? this.target.obj.centerTile
-                        : this.target.obj.tile
+                    ? this.getRangeCheckTile(this.target.obj)
                     : this.lastValidTargetPosition!.tile
                 : this.target.tile;
             const needsMove = !this.rangeHelper.isInWeaponRange(obj, effectiveTarget, this.weapon, this.game.rules) ||
@@ -526,12 +542,20 @@ export class AttackTask extends Task {
             this.moveExecuted = false;
             this.moveAttempts = 0;
             if (moveTask) {
-                const shouldCancelMove = (obj.rules.balloonHover && !obj.rules.hoverAttack) ||
+                // 完善模拟层逻辑：n && (A || B || C || D || n.cancel())
+                // A/B/C/D true ⇒ keep moving; all false ⇒ cancel move to stand and fire.
+                const keepMoveTask =
+                    (obj.rules.balloonHover && !obj.rules.hoverAttack) ||
                     obj.rules.fighter ||
                     obj.rules.spawned ||
                     (obj.rules.movementZone === MovementZone.Fly &&
-                        !this.rangeHelper.isInRange2(obj, this.target.obj ?? this.target.tile, this.weapon.minRange, this.weapon.range - 1));
-                if (shouldCancelMove) {
+                        !this.rangeHelper.isInRange2(
+                            obj,
+                            this.target.obj ?? this.target.tile,
+                            this.weapon.minRange,
+                            this.weapon.range - 1,
+                        ));
+                if (!keepMoveTask) {
                     moveTask.cancel();
                 }
             }
@@ -629,7 +653,9 @@ export class AttackTask extends Task {
             obj.isFiring = true;
         }
         if (obj.art.fireUp) {
-            this.children.push(new WaitTicksTask(obj.art.fireUp).setCancellable(false));
+            if (!(obj.isInfantry() && obj.suppressionTrait?.isSuppressed())) {
+                this.children.push(new WaitTicksTask(obj.art.fireUp).setCancellable(false));
+            }
             attackTrait.attackState = AttackState.FireUp;
             return false;
         }
@@ -671,6 +697,20 @@ export class AttackTask extends Task {
         }
         return Math.min(this.game.rules.general.prism.supportMax, supportingTowers.length);
     }
+    getRangeCheckTile(obj: any): any {
+        return obj.isBuilding()
+            ? this.game.map.isWithinBounds(obj.centerTile)
+                ? obj.centerTile
+                : this.getInBoundsFoundationTile(obj) ?? obj.tile
+            : obj.tile;
+    }
+
+    getInBoundsFoundationTile(obj: any): any {
+        return this.game.map.tileOccupation
+            .calculateTilesForGameObject(obj.tile, obj)
+            .find((tile: any) => this.game.map.isWithinBounds(tile));
+    }
+
     getTargetLinesConfig(): TargetLinesConfig {
         return this.targetLinesConfig;
     }

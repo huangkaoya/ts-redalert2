@@ -137,4 +137,7 @@ __test_strip.mjs
 __stripped_output.js
 _temp_builtIn/
 
+# Local simulation reference extracts (large)
+.ref/
+
 #शंकर 

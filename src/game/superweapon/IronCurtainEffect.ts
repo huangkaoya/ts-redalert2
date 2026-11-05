@@ -9,15 +9,15 @@ export class IronCurtainEffect extends SuperWeaponEffect {
         let tile;
         while ((tile = tileFinder.getNextTile())) {
             for (const object of game.map.getGroundObjectsOnTile(tile)) {
+                // 完善模拟层逻辑：skip destroyed before organic/invuln branch.
                 if (!object.isTechno() ||
+                    object.isDestroyed ||
                     (object.isUnit() && object.tile !== tile) ||
                     object.rules.missileSpawn) {
                     continue;
                 }
                 if (object.rules.organic) {
-                    if (!object.isDestroyed) {
-                        game.destroyObject(object, source);
-                    }
+                    game.destroyObject(object, source);
                 }
                 else {
                     object.invulnerableTrait.setActiveFor(duration, game.currentTick);

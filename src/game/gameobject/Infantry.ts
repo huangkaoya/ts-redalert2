@@ -8,6 +8,7 @@ import { Techno } from '@/game/gameobject/Techno';
 import { IdleActionTrait } from '@/game/gameobject/trait/IdleActionTrait';
 import { CrashableTrait } from '@/game/gameobject/trait/CrashableTrait';
 import { AgentTrait } from '@/game/gameobject/trait/AgentTrait';
+import { CastProgressTrait } from '@/game/gameobject/trait/CastProgressTrait';
 import { CrateBonuses } from '@/game/gameobject/unit/CrateBonuses';
 export class Infantry extends Techno {
     static SUB_CELLS = [2, 4, 3];
@@ -23,6 +24,7 @@ export class Infantry extends Techno {
     crashableTrait?: CrashableTrait;
     suppressionTrait?: SuppressionTrait;
     agentTrait?: AgentTrait;
+    castProgressTrait?: CastProgressTrait;
     idleActionTrait: IdleActionTrait;
     get isMoving(): boolean {
         return this.moveTrait.isMoving();
@@ -42,6 +44,10 @@ export class Infantry extends Techno {
         if (infantry.rules.agent) {
             infantry.agentTrait = new AgentTrait();
             infantry.traits.add(infantry.agentTrait);
+        }
+        if (infantry.rules.engineer) {
+            infantry.castProgressTrait = new CastProgressTrait();
+            infantry.traits.add(infantry.castProgressTrait);
         }
         infantry.idleActionTrait = new IdleActionTrait();
         infantry.traits.add(infantry.idleActionTrait);

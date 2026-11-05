@@ -1,4 +1,5 @@
 import { EventDispatcher } from '../../util/event';
+import { MainMenuScreenType, ScreenType } from './ScreenType';
 export interface Screen {
     title?: string;
     musicType?: any;
@@ -23,12 +24,16 @@ export abstract class Controller {
     addScreen(screenType: number, screen: Screen): void {
         this.screens.set(screenType, screen);
     }
-    async goToScreenBlocking(screenType: number, params?: any): Promise<void> {
+    async goToScreenBlocking(screenType: number | string, params?: any): Promise<void> {
+        const resolvedScreenType = this.resolveScreenKey(screenType);
+        if (!this.screens.has(resolvedScreenType)) {
+            throw new Error(`Screen ${screenType} not found`);
+        }
         console.log(`[Controller] Going to screen: ${screenType}`);
         while (this.currentScreen || this.screenStack.length) {
             await this.leaveCurrentScreen();
         }
-        await this.pushScreen(screenType, params);
+        await this.pushScreen(resolvedScreenType, params);
     }
     async leaveCurrentScreen(): Promise<void> {
         await this.popScreen();
@@ -38,7 +43,8 @@ export abstract class Controller {
             console.error('[Controller] Error navigating to screen:', error);
         });
     }
-    async pushScreen(screenType: number, params?: any): Promise<void> {
+    async pushScreen(screenType: number | string, params?: any): Promise<void> {
+        const resolvedScreenType = this.resolveScreenKey(screenType);
         console.log(`[Controller] Pushing screen: ${screenType}`);
         if (this.currentScreen) {
             const currentScreenType = this.getCurrentScreenType();
@@ -50,13 +56,27 @@ export abstract class Controller {
                 });
             }
         }
-        const screen = this.screens.get(screenType);
+        const screen = this.screens.get(resolvedScreenType);
         if (!screen) {
             throw new Error(`Screen ${screenType} not found`);
         }
         this.currentScreen = screen;
         await screen.onEnter(params);
-        this._onScreenChange.dispatch(this, screenType);
+        this._onScreenChange.dispatch(this, resolvedScreenType);
+    }
+    private resolveScreenKey(screenType: number | string): number {
+        if (typeof screenType === 'number') {
+            return screenType;
+        }
+        const rootValue = (ScreenType as unknown as Record<string, number | string>)[screenType];
+        if (typeof rootValue === 'number' && this.screens.has(rootValue) && ScreenType[rootValue] === screenType) {
+            return rootValue;
+        }
+        const menuValue = (MainMenuScreenType as unknown as Record<string, number | string>)[screenType];
+        if (typeof menuValue === 'number' && this.screens.has(menuValue) && MainMenuScreenType[menuValue] === screenType) {
+            return menuValue;
+        }
+        return Number.NaN;
     }
     async popScreen(params?: any): Promise<void> {
         console.log('[Controller] Popping screen');

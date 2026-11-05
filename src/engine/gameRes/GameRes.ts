@@ -477,7 +477,7 @@ export class GameRes {
     }
     private async checkMixesIntegrity(rfsDir: RealFileSystemDir): Promise<void> {
         const mixesToVerify = new Map<string, string[]>([
-            ["ra2.mix", ["E7BA3BE", "5DC70844"]],
+            ["ra2.mix", ["E7BA3BE", "5DC70844", "D48F0E34"]],
             ["multi.mix", ["984EFDB6", "3CDB648F"]],
         ]);
         for (const [mixName, expectedCrcs] of mixesToVerify.entries()) {

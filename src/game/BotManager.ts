@@ -84,11 +84,11 @@ export class BotManager {
             (action as any).process();
             const actionLog = action.print();
             if (actionLog) {
-                this.actionLogger.debug(`(${action.player.name})@${gameState.currentTick}: ${actionLog}`);
+                this.actionLogger?.debug(`(${action.player.name})@${gameState.currentTick}: ${actionLog}`);
             }
         }
-        for (const combatant of gameState.getCombatants().filter((c: any) => c.isAi)) {
-            this.bots.get(combatant).onGameTick(this.gameApi);
+        for (const bot of this.bots.values()) {
+            bot.onGameTick(this.gameApi);
         }
     }
 

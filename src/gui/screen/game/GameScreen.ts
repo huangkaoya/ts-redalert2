@@ -146,7 +146,7 @@ export class GameScreen extends RootScreen {
                 this.controller?.goToScreen(ScreenType.MainMenuRoot, {
                     route: new MainMenuRoute(MainMenuScreenType.Login, {
                         forceUser: playerName,
-                        afterLogin: (user: any) => new RootRoute('Game', params)
+                        afterLogin: (user: any) => new RootRoute(ScreenType.Game, params)
                     })
                 });
                 return;
@@ -480,7 +480,7 @@ export class GameScreen extends RootScreen {
         };
         this.errorHandler.handle(error, message, skipGoToMenu ? undefined : () => {
             cleanup();
-            this.controller?.goToScreen('MainMenuRoot');
+            this.controller?.goToScreen(ScreenType.MainMenuRoot);
         });
         if (skipGoToMenu) {
             cleanup();

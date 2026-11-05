@@ -2,7 +2,6 @@ import React from "react";
 import { jsx } from "@/gui/jsx/jsx";
 import { HtmlView } from "@/gui/jsx/HtmlView";
 import { ScreenType } from "@/gui/screen/ScreenType";
-import { ScreenType as MainMenuScreenType } from "@/gui/screen/mainMenu/ScreenType";
 import { CompositeDisposable } from "@/util/disposable/CompositeDisposable";
 import { StorageQuotaError } from "data/vfs/StorageQuotaError";
 import { MainMenuScreen } from "@/gui/screen/mainMenu/MainMenuScreen";
@@ -420,7 +419,7 @@ export class ModSelScreen extends MainMenuScreen {
     }
     private handleError(error: any, message: string): void {
         this.errorHandler.handle(error, message, () => {
-            this.rootController.goToScreen(MainMenuScreenType.MainMenuRoot);
+            this.rootController.goToScreen(ScreenType.MainMenuRoot);
         });
     }
 }

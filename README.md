@@ -6,6 +6,10 @@
 
 需要注意的是，《红色井界》/RA2WEB的负责人从未以任何方式开源游戏客户端代码（即便存在诸如mod-sdk之类的周边开源内容）。本项目运行产生的BUG、功能不完善，不能等同视为对《红色井界》/RA2WEB的名誉贬损。
 
+隆重感谢 Chronodivide 及其创始人，这是整个网页红警创意的来源。需要额外声明：Chronodivide 不是开源项目，本项目与其无关。
+
+本项目的 VXL 渲染借鉴了 OpenRA。MIX 加解密使用了 XCC 的 `mix_decode.cpp`（Olaf van der Spek，GPL-3.0 或更高版本）。按这些许可证的要求，本项目必须采用 GPL-3.0 或更严格的许可证，因此本项目使用 GPL-3.0。
+
 红色警戒2网页版，一款经典的即时战略类游戏的完整TypeScript重构版本，使用React + TypeScript + Vite + Three.js构建。
 
 ![动画](https://github.com/user-attachments/assets/d83f6001-d426-4d49-98a6-8282addc898d)

@@ -199,7 +199,9 @@ export class Engine {
     public static customArtFileName = "artcd.ini";
     public static customMpModesFileName = "mpmodescd.ini";
     public static shroudFileName = "shroud.shp";
-    public static mixinRulesFileNames = new Map<MixinRulesType, string>().set(MixinRulesType.NoDogEngiKills, "nodogengikills.ini");
+    public static mixinRulesFileNames = new Map<MixinRulesType, string>()
+        .set(MixinRulesType.NoDogEngiKills, "nodogengikills.ini")
+        .set(MixinRulesType.BalanceChanges, "balancecd.ini");
     private static activeMod?: string;
     private static modHash?: number;
     private static gameResSource?: GameResSource;

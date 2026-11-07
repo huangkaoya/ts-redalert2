@@ -76,7 +76,7 @@ export class ReplayStorageFileSystem {
         const currentManifest = await this.getManifest();
         let replayFileCount = 0;
         for await (const entry of this.dir.getEntries()) {
-            if (entry.endsWith(Replay.extension)) {
+            if (this.isReplayFile(entry)) {
                 replayFileCount++;
             }
         }
@@ -89,29 +89,37 @@ export class ReplayStorageFileSystem {
             lastModified: number;
         }>();
         for await (const file of this.dir.getRawFiles()) {
-            if (file.name.endsWith(Replay.extension)) {
+            if (this.isReplayFile(file.name)) {
                 replayFiles.set(file.name, file);
             }
         }
         const newManifest: ReplayMeta[] = [];
         for (const entry of currentManifest) {
-            const fileName = this.getReplayFileName(entry);
-            if (replayFiles.has(fileName)) {
+            const fileName = this.getReplayFileNames(entry).find((name) => replayFiles.has(name));
+            if (fileName) {
                 newManifest.push(entry);
-                replayFiles.delete(fileName);
+                this.getReplayFileNames(entry).forEach((name) => replayFiles.delete(name));
             }
         }
         if (currentManifest.length - newManifest.length > 0) {
             console.info(`Removed ${currentManifest.length - newManifest.length} orphaned entries from index`);
         }
         if (replayFiles.size > 0) {
+            const seenReplayNames = new Set<string>();
             for (const file of replayFiles.values()) {
+                const extension = Replay.supportedExtensions.find((item) => file.name.toLowerCase().endsWith(item))!;
+                const replayName = file.name
+                    .replace(ReplayStorageFileSystem.unsavedReplayPrefix, '')
+                    .slice(0, -extension.length);
+                const uniqueKey = `${file.name.startsWith(ReplayStorageFileSystem.unsavedReplayPrefix) ? 'temp' : 'keep'}:${replayName.toLowerCase()}`;
+                if (seenReplayNames.has(uniqueKey)) {
+                    continue;
+                }
+                seenReplayNames.add(uniqueKey);
                 const timestamp = file.lastModified;
                 newManifest.unshift({
                     id: THREE.MathUtils.generateUUID(),
-                    name: file.name
-                        .replace(ReplayStorageFileSystem.unsavedReplayPrefix, '')
-                        .replace(Replay.extension, ''),
+                    name: replayName,
                     keep: !file.name.startsWith(ReplayStorageFileSystem.unsavedReplayPrefix),
                     timestamp: timestamp,
                 });
@@ -135,22 +143,27 @@ export class ReplayStorageFileSystem {
     }
     async deleteAllReplays(): Promise<void> {
         for await (const entry of this.dir.getEntries()) {
-            if (entry.endsWith(Replay.extension)) {
+            if (this.isReplayFile(entry)) {
                 await this.dir.deleteFile(entry);
             }
         }
         await this.deleteManifest();
     }
     async getReplayData(meta: ReplayMeta): Promise<string> {
-        const fileName = this.getReplayFileName(meta);
-        if (!(await this.dir.containsEntry(fileName))) {
-            throw new Error(`Replay file "${fileName}" not found.`);
+        for (const fileName of this.getReplayFileNames(meta)) {
+            if (await this.dir.containsEntry(fileName)) {
+                return await this.dir.getRawFile(fileName);
+            }
         }
-        return await this.dir.getRawFile(fileName);
+        throw new Error(`Replay file "${this.getReplayFileName(meta)}" not found.`);
     }
     async hasReplayData(meta: ReplayMeta): Promise<boolean> {
-        const fileName = this.getReplayFileName(meta);
-        return await this.dir.containsEntry(fileName);
+        for (const fileName of this.getReplayFileNames(meta)) {
+            if (await this.dir.containsEntry(fileName)) {
+                return true;
+            }
+        }
+        return false;
     }
     async saveReplayData(meta: ReplayMeta, data: string): Promise<void> {
         const stream = new DataStream();
@@ -171,11 +184,22 @@ export class ReplayStorageFileSystem {
         }
     }
     async deleteReplayData(meta: ReplayMeta): Promise<void> {
-        await this.dir.deleteFile(this.getReplayFileName(meta));
+        for (const fileName of this.getReplayFileNames(meta)) {
+            if (await this.dir.containsEntry(fileName)) {
+                await this.dir.deleteFile(fileName);
+            }
+        }
     }
     getReplayFileName(meta: ReplayMeta): string {
         return ((meta.keep ? '' : ReplayStorageFileSystem.unsavedReplayPrefix) +
             meta.name +
             Replay.extension);
+    }
+    private getReplayFileNames(meta: ReplayMeta): string[] {
+        const prefix = meta.keep ? '' : ReplayStorageFileSystem.unsavedReplayPrefix;
+        return Replay.supportedExtensions.map((extension) => prefix + meta.name + extension);
+    }
+    private isReplayFile(fileName: string): boolean {
+        return Replay.supportedExtensions.some((extension) => fileName.toLowerCase().endsWith(extension));
     }
 }

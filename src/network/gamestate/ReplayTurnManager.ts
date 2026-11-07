@@ -72,25 +72,18 @@ export class ReplayTurnManager {
         const records = this.actionsByTick.get(tick);
         if (records) {
             for (const record of records) {
-                try {
-                    const action = this.actionFactory.create(record.actionType);
-                    action.unserialize(record.data);
-                    action.player = this.game.getPlayer(record.playerId);
-                    action.process();
+                const action = this.actionFactory.create(record.actionType);
+                action.unserialize(record.data);
+                action.player = this.game.getPlayer(record.playerId);
+                action.process();
 
-                    const printable = action.print?.();
-                    if (printable) {
-                        this.actionLogger?.debug(`[replay](${action.player?.name})@${tick}: ${printable}`);
-                    }
-                } catch (error) {
-                    console.warn(`[ReplayTurnManager] Failed to replay action at tick ${tick}:`, error);
+                const printable = action.print?.();
+                if (printable) {
+                    this.actionLogger?.debug(`[replay](${action.player?.name})@${tick}: ${printable}`);
                 }
             }
             this.onActionsSent.dispatch(this);
         }
-
-        // Advance game state
-        this.game.update();
 
         // Dispatch replay events for this tick
         const events = this.eventsByTick.get(tick);
@@ -110,6 +103,10 @@ export class ReplayTurnManager {
             }
         }
 
+        // Match the live client's lockstep order: apply actions and side-channel
+        // events for this tick before advancing the simulation.
+        this.game.update();
+
         // Verify hash checkpoint
         const expectedHash = this.hashByTick.get(tick);
         if (expectedHash !== undefined) {
@@ -127,7 +124,7 @@ export class ReplayTurnManager {
         }
 
         // Check if replay has ended
-        if (this.replay.finishedTick && tick >= this.replay.finishedTick) {
+        if (tick >= this.replay.finishedTick) {
             this.finished = true;
             this.onFinished.dispatch(this, undefined);
             return false;

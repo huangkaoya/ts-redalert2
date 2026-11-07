@@ -284,6 +284,20 @@ export class Overlay {
                     smat.depthWrite = false;
                 }
             }
+            else if (this.gameObject.rules.crate) {
+                // Match the overlay batch layer's draw settings when a crate
+                // is rendered individually, so water sprites are not hidden
+                // by the map surface at the same elevation.
+                for (const spriteMesh of [mainRenderable.getShapeMesh(), mainRenderable.getShadowMesh()]) {
+                    if (!spriteMesh) {
+                        continue;
+                    }
+                    spriteMesh.renderOrder = -1;
+                    const material = (spriteMesh as THREE.Mesh).material as THREE.Material;
+                    material.depthTest = false;
+                    material.depthWrite = false;
+                }
+            }
             container.updateMatrix();
             parent.add(container);
         }

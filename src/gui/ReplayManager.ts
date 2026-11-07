@@ -114,7 +114,10 @@ export class ReplayManager {
             const reader = new FileReader();
             reader.onload = async (event) => {
                 try {
-                    const fileName = file.name.replace(Replay.extension, "");
+                    const extension = Replay.supportedExtensions.find((item) => file.name.toLowerCase().endsWith(item));
+                    const fileName = extension
+                        ? file.name.slice(0, -extension.length)
+                        : file.name;
                     const replay = new Replay();
                     replay.unserialize(event.target?.result as string, {
                         name: fileName,

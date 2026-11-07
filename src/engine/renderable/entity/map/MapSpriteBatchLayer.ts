@@ -93,7 +93,10 @@ export class MapSpriteBatchLayer {
             .forEach((builder) => builder.updateLighting());
     }
     shouldBeBatched(obj: any): boolean {
-        return this.batchedObjectRules.has(obj.rules);
+        // Crates are transient overlays with separate main and shadow SHP
+        // frames. Render them individually so water crates do not depend on
+        // the shared map-overlay batch for their visible image.
+        return !obj.rules.crate && this.batchedObjectRules.has(obj.rules);
     }
     private getBatchKey(obj: any): string {
         return obj.art.paletteType + "_" + obj.art.customPaletteName;

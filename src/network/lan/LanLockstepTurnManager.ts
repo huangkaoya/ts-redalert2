@@ -29,7 +29,7 @@ export class LanLockstepTurnManager {
         private readonly matchSession: LanMatchSession,
         private readonly actionLogger?: { debug(message: string): void },
         private readonly lockstepLogger?: { debug?(message: string): void; warn?(message: string): void },
-        private readonly replayRecorder?: { recordActions?(tick: number, actions: any[]): void }
+        private readonly replayRecorder?: { recordActions?(tick: number, actions: any[]): void; recordTick?(tick: number): void }
     ) { }
 
     init(): void {
@@ -82,6 +82,7 @@ export class LanLockstepTurnManager {
         }
 
         this.game.update();
+        this.replayRecorder?.recordTick?.(this.game.currentTick - 1);
         return true;
     }
 

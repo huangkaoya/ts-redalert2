@@ -163,7 +163,7 @@ export class ReplaySelScreen extends MainMenuScreen {
     private initFileInput(): void {
         const input = this.fileInput = document.createElement("input");
         input.setAttribute("type", "file");
-        input.setAttribute("accept", Replay.extension);
+        input.setAttribute("accept", Replay.supportedExtensions.join(","));
         input.setAttribute("style", "display: none");
         document.body.appendChild(input);
         const handleChange = async (): Promise<void> => {

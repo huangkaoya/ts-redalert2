@@ -18,7 +18,7 @@ export class SoloPlayTurnManager {
         private readonly currentPlayer: any,
         private readonly inputActions: { dequeueAll(): any[] },
         private readonly actionLogger?: { debug(message: string): void },
-        private readonly replayRecorder?: { recordActions?(tick: number, actions: any[]): void }
+        private readonly replayRecorder?: { recordActions?(tick: number, actions: any[]): void; recordTick?(tick: number): void }
     ) { }
 
     init(): void {
@@ -50,6 +50,7 @@ export class SoloPlayTurnManager {
         if (this.game.status !== GameStatus.Ended) {
             let actions = this.inputActions.dequeueAll();
             if (actions.length) {
+                actions.forEach((action) => action.player = this.currentPlayer);
                 this.replayRecorder?.recordActions?.(this.game.currentTick, actions);
                 this.onActionsSent.dispatch(this);
             } else {
@@ -59,6 +60,7 @@ export class SoloPlayTurnManager {
         }
 
         this.game.update();
+        this.replayRecorder?.recordTick?.(this.game.currentTick - 1);
 
         if (this.gameSpeedChanged) {
             this.game.speed.value = this.game.desiredSpeed.value;

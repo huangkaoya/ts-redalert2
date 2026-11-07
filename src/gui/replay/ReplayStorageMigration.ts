@@ -2,7 +2,7 @@ import { Replay } from '../../network/gamestate/Replay';
 import { ReplayStorageFileSystem } from './ReplayStorageFileSystem';
 import { ReplayMeta } from './ReplayMeta';
 declare const THREE: {
-    Math: {
+    MathUtils: {
         generateUUID(): string;
     };
 };
@@ -72,15 +72,17 @@ export class ReplayStorageMigration {
                     const newManifest: ReplayMeta[] = [];
                     const existingFiles = new Set<string>();
                     for await (const entry of replayDir.getEntries()) {
-                        if (entry.endsWith(Replay.extension)) {
+                        if (Replay.supportedExtensions.some((extension) => entry.toLowerCase().endsWith(extension))) {
                             existingFiles.add(entry);
                         }
                     }
                     const fileRenames = new Map<string, string>();
                     const usedNames = new Set<string>();
                     for (const oldEntry of oldManifest) {
-                        const oldFileName = 'replay_' + oldEntry.id + Replay.extension;
-                        if (existingFiles.has(oldFileName)) {
+                        const oldFileName = Replay.supportedExtensions
+                            .map((extension) => 'replay_' + oldEntry.id + extension)
+                            .find((fileName) => existingFiles.has(fileName));
+                        if (oldFileName) {
                             const newEntry: ReplayMeta = {
                                 id: THREE.MathUtils.generateUUID(),
                                 name: Replay.sanitizeFileName(oldEntry.name),

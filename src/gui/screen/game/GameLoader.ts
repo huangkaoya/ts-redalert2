@@ -25,6 +25,7 @@ import { GameOptRandomGen } from '@/game/gameopts/GameOptRandomGen';
 import { DebugRenderable } from '@/engine/renderable/DebugRenderable';
 import { MixinRules } from '@/game/ini/MixinRules';
 import { isNotNullOrUndefined } from '@/util/typeGuard';
+import * as GameApi from '@/game/api';
 export class GameLoader {
     constructor(private appVersion: string, private workerHostApi: any, private cdnResourceLoader: any, private appResourceLoader: any, private rules: any, private gameModes: any, private sound: any, private iniLogger: any, private actionLogger: any, private speedCheat: any, private gameResConfig: any, private vxlGeometryPool: any, private buildingImageDataCache: any, private debugBotIndex: any, private devMode: boolean) { }
     async load(gameId: string, timestamp: number, gameOptions: any, mapFile: any, playerName: string, isSinglePlayer: boolean, loadingScreenApi: any, cancellationToken?: any): Promise<any> {
@@ -249,13 +250,77 @@ export class GameLoader {
         return { game, theater };
     }
     private async loadBotsLib(): Promise<any> {
-        try {
-            const botsLib = await (window as any).SystemJS.import('@chronodivide/sp-bots');
-            return botsLib;
+        // Replays do not record AI decisions. Always use the checked-in official
+        // v0.85 bundle so a newer SystemJS/CDN package cannot change AI behavior.
+        const botsLib = await this.loadAmdBotsLib();
+        if (!botsLib?.SupalosaBot) {
+            throw new Error('The official v0.85 bot bundle did not export SupalosaBot');
         }
-        catch (error) {
-            return { version: this.appVersion };
-        }
+        console.info('[GameLoader] Loaded the pinned Chrono Divide v0.85 SupalosaBot bundle.');
+        return botsLib;
+    }
+    private loadAmdBotsLib(): Promise<any> {
+        return new Promise((resolve, reject) => {
+            const win = window as any;
+            const previousDefine = win.define;
+            const script = document.createElement('script');
+            let settled = false;
+            const timeout = window.setTimeout(() => finish(new Error('Timed out loading the v0.85 bot library')), 15000);
+            const restore = () => {
+                window.clearTimeout(timeout);
+                script.remove();
+                if (win.define === define) {
+                    if (previousDefine === undefined) {
+                        delete win.define;
+                    }
+                    else {
+                        win.define = previousDefine;
+                    }
+                }
+            };
+            const finish = (error?: Error, value?: any) => {
+                if (settled) {
+                    return;
+                }
+                settled = true;
+                restore();
+                if (error) {
+                    reject(error);
+                }
+                else {
+                    resolve(value);
+                }
+            };
+            const define = (moduleName: string, dependencies: string[], factory: (...modules: any[]) => any) => {
+                if (moduleName !== 'SPBots') {
+                    finish(new Error(`Unexpected AMD module "${moduleName}" from the bot bundle`));
+                    return;
+                }
+                try {
+                    const modules = dependencies.map((dependency) => {
+                        if (dependency === '@chronodivide/game-api') {
+                            return GameApi;
+                        }
+                        throw new Error(`Unsupported bot library dependency "${dependency}"`);
+                    });
+                    finish(undefined, factory(...modules));
+                }
+                catch (error) {
+                    finish(error instanceof Error ? error : new Error(String(error)));
+                }
+            };
+            define.amd = {};
+            win.define = define;
+            script.async = true;
+            script.src = '/res/spbots-v0.85.0.min.js';
+            script.onerror = () => finish(new Error('Failed to load the local v0.85 bot library'));
+            script.onload = () => {
+                if (!settled) {
+                    finish(new Error('The v0.85 bot bundle did not register its AMD module'));
+                }
+            };
+            document.head.appendChild(script);
+        });
     }
     private async loadHudSideImages(cdnResources?: any, hudSide: SideType = SideType.GDI): Promise<void> {
         if (!Engine.vfs)

@@ -35,6 +35,9 @@ export class Serializer {
             Number(gameOpts.destroyableBridges),
             Number(gameOpts.multiEngineer),
             Number(gameOpts.noDogEngiKills),
+            Number(gameOpts.instantCapture ?? true),
+            Number(gameOpts.delayedOils ?? false),
+            Number(gameOpts.balanceChanges ?? false),
             ...(gameOpts.unknown ? [gameOpts.unknown] : [])
         ].join(',');
         const playersPart = gameOpts.humanPlayers

@@ -1,7 +1,7 @@
 import { Replay, ReplayEventType } from './Replay';
 
 export class ReplayRecorder {
-    private checkpointInterval = 300; // ~20 seconds at 15 ticks/sec
+    private readonly checkpointInterval = 300; // ~20 seconds at 15 ticks/sec
 
     constructor(
         private readonly game: any,
@@ -10,6 +10,12 @@ export class ReplayRecorder {
 
     recordActions(tick: number, actions: any[]): void {
         for (const action of actions) {
+            // NoAction is only a lockstep placeholder. Other actions can have
+            // an empty payload and still change simulation state (for example
+            // resign, drop, or switch to observer).
+            if (action?.actionType === 0) {
+                continue;
+            }
             let serialized: Uint8Array | undefined;
             try {
                 serialized = action.serialize?.();
@@ -23,18 +29,28 @@ export class ReplayRecorder {
                 });
                 continue;
             }
-            if (!serialized || serialized.length === 0) {
+            if (!serialized) {
                 continue;
+            }
+            let playerId = 0;
+            if (action.player && typeof this.game.getPlayerNumber === 'function') {
+                playerId = this.game.getPlayerNumber(action.player);
+            } else if (Number.isInteger(action.player?.index)) {
+                // Compatibility fallback for recorder test doubles and legacy
+                // integrations. Runtime Player objects use getPlayerNumber.
+                playerId = action.player.index;
             }
             this.replay.actionRecords.push({
                 tick,
-                playerId: action.player?.index ?? 0,
+                playerId,
                 actionType: action.actionType,
                 data: serialized,
             });
         }
+    }
 
-        // Periodic hash checkpoints
+    /** Capture a checkpoint after the simulation has advanced past this tick. */
+    recordTick(tick: number): void {
         if (tick > 0 && tick % this.checkpointInterval === 0 &&
             (this.replay.hashCheckpoints.length === 0 ||
              this.replay.hashCheckpoints[this.replay.hashCheckpoints.length - 1].tick !== tick)) {
@@ -68,9 +84,13 @@ export class ReplayRecorder {
     private resolvePlayerId(playerName: string): number {
         try {
             const player = this.game.getPlayerByName(playerName);
-            return player?.index ?? 0;
+            if (player && typeof this.game.getPlayerNumber === 'function') {
+                return this.game.getPlayerNumber(player);
+            }
         } catch {
-            return 0;
+            // Fall through to the option list for older game test doubles.
         }
+        const humanPlayerId = this.replay.gameOpts?.humanPlayers?.findIndex((player: any) => player.name === playerName);
+        return humanPlayerId !== undefined && humanPlayerId >= 0 ? humanPlayerId : 0;
     }
 }

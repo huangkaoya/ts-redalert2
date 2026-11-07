@@ -194,8 +194,8 @@ export class MainMenuRootScreen extends RootScreen {
             const errorHandler = new ErrorHandler(this.messageBoxApi, this.strings);
             const rules = new Rules(Engine.getRules());
             const replayManager = (this as any).replayManager;
-            const engineVersion = this.appVersion;
-            const engineModHash = Engine.getActiveMod?.() ?? '';
+            const engineVersion = Engine.getVersion();
+            const engineModHash = String(Engine.getModHash());
             screen = new screenClass(engineVersion, engineModHash, undefined, undefined, this.rootController, this.strings, this.jsxRenderer, errorHandler, this.messageBoxApi, replayManager, undefined, rules);
         }
         else if (screenType === MainMenuScreenType.LanSetup) {
